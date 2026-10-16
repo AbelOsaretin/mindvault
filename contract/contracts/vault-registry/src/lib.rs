@@ -72,6 +72,8 @@ pub const TOP_TAGS_CAP: u32 = 20;
 pub const MAX_BATCH_REGISTER: u32 = 10;
 /// Maximum number of prices that can be updated in one `set_price_many` call.
 pub const MAX_BATCH_PRICE_UPDATES: u32 = 10;
+/// Maximum number of lifecycle states returned by `get_resource_states`.
+pub const MAX_BATCH_RESOURCE_STATES: u32 = 20;
 
 // ── Fee / royalty configuration ──────────────────────────────────────────────
 /// Fee basis-point ceiling: 50 % (5 000 bp). Neither platform_fee_bps nor
@@ -96,7 +98,9 @@ pub const REGISTRY_NAME: &str = "mindvault-vault-registry";
 /// `Resource` struct's fields would require callers to change how they decode
 /// it (e.g. the tags field added in schema version 2, dispute_flag added in
 /// schema version 4, metadata_frozen_at added in schema version 6).
-pub const RESOURCE_SCHEMA_VERSION: u32 = 6;
+pub const RESOURCE_SCHEMA_VERSION: u32 = 7;
+/// The simulated prior schema that can be upgraded in place by this build.
+pub const PREVIOUS_RESOURCE_SCHEMA_VERSION: u32 = 6;
 
 /// Maximum byte length of a settlement transaction hash stored in a
 /// [`PaymentReceipt`]. Stellar transaction hashes are 64 hex characters
@@ -156,6 +160,7 @@ pub const METHOD_SCHEMA: &[(&str, &str)] = &[
     // ── Read-only queries ─────────────────────────────────────────────────
     ("get", "—"),
     ("get_resource_state", "—"),
+    ("get_resource_states", "—"),
     ("get_many", "—"),
     ("exists", "—"),
     ("exists_many", "—"),
@@ -192,6 +197,7 @@ pub const METHOD_SCHEMA: &[(&str, &str)] = &[
     ("registry_info", "—"),
     ("contract_version", "—"),
     ("resource_schema_version", "—"),
+    ("migrate_resource", "creator"),
     ("initialize_network", "—"),
     ("network_id", "—"),
     // ── Admin role ────────────────────────────────────────────────────────
@@ -327,7 +333,7 @@ pub const ERROR_SCHEMA: &[(u32, &str, &str)] = &[
     (34, "FeeBpsTooHigh", "A fee or fee-destination basis-point value exceeds its configured ceiling."),
     (35, "TotalFeeTooHigh", "The combined fee policy or fee-destination split is invalid."),
     (36, "CountOverflow", "The global resource count would overflow `u32`."),
-    (37, "BatchTooLarge", "`get_many` or `get_owner_many` was called with more than 20 ids."),
+    (37, "BatchTooLarge", "A bounded batch read was called with more than its documented maximum number of ids."),
     (38, "DuplicateReceipt", "A purchase receipt is already anchored for `(resource_id, buyer)`."),
     (39, "FlagReasonHashTooLong", "`reason_hash` in `set_flag_reason_hash` exceeds `MAX_FLAG_REASON_HASH_LEN` (64 bytes)."),
     (40, "ContractPaused", "A state-changing method was called while the registry is paused."),
@@ -344,6 +350,7 @@ pub const ERROR_SCHEMA: &[(u32, &str, &str)] = &[
     (51, "InvalidMetadataPointers", "`set_metadata_pointers` received an empty, oversized (> `MAX_METADATA_POINTERS`), or duplicate pointer list, or an out-of-range `primary` index."),
     (52, "AdminAlreadySet", "`bootstrap_dual_admin` was called after an admin was already set."),
     (53, "RecoveryAdminNotSet", "`recover_admin` was called but no recovery admin is configured."),
+    (54, "UnsupportedResourceSchema", "A resource uses a schema version this deployment cannot safely read or upgrade."),
 ];
 
 /// Canonical list of every event topic this contract emits, paired with a
@@ -1248,6 +1255,8 @@ pub enum Error {
     AdminAlreadySet = 52,
     /// `recover_admin` was called but no recovery admin is configured.
     RecoveryAdminNotSet = 53,
+    /// A resource was written by a schema version this contract cannot migrate.
+    UnsupportedResourceSchema = 54,
 }
 
 #[contract]
@@ -2497,7 +2506,13 @@ impl VaultRegistry {
         limit: u32,
     ) -> IdPage {
         let ids = Self::creator_list(&env, &creator);
-        Self::id_page(&env, &ids, cursor, limit, |_| true)
+        // A tombstone may be written after a caller receives a cursor. Filter
+        // it at read time as a second line of defence so the continuation
+        // never exposes a retired resource, even if a legacy index still
+        // contains its id.
+        Self::id_page(&env, &ids, cursor, limit, |resource| {
+            resource.state != ResourceState::Tombstoned
+        })
     }
 
     /// `list_by_tag` with an id-based cursor (see `list_by_creator_page`).
@@ -2632,6 +2647,41 @@ impl VaultRegistry {
         Self::validate_resource_id(&id)?;
         let resource = Self::load(&env, &id)?;
         Ok(resource.state)
+    }
+
+    /// Return lifecycle states for up to `MAX_BATCH_RESOURCE_STATES` ids.
+    /// Results preserve input order; ids with no resource return `None`.
+    pub fn get_resource_states(
+        env: Env,
+        ids: Vec<String>,
+    ) -> Result<Vec<Option<ResourceState>>, Error> {
+        if ids.len() > MAX_BATCH_RESOURCE_STATES {
+            return Err(Error::BatchTooLarge);
+        }
+        let mut result = Vec::new(&env);
+        for i in 0..ids.len() {
+            let id = ids.get(i).unwrap();
+            Self::validate_resource_id(&id)?;
+            let key = DataKey::Resource(id);
+            let resource: Option<Resource> = env.storage().persistent().get(&key);
+            if resource.is_some() {
+                Self::bump_persistent(&env, &key);
+            }
+            result.push_back(resource.map(|resource| resource.state));
+        }
+        Ok(result)
+    }
+
+    /// Upgrade a resource written using the immediately preceding supported
+    /// schema. Current-schema resources are accepted as a no-op. Unsupported
+    /// schema versions are rejected before storage is touched.
+    pub fn migrate_resource(env: Env, id: String) -> Result<(), Error> {
+        Self::require_not_paused(&env)?;
+        Self::validate_resource_id(&id)?;
+        let mut resource = Self::load(&env, &id)?;
+        resource.creator.require_auth();
+        Self::save(&env, &mut resource);
+        Ok(())
     }
 
     /// Read several resources in one invocation, preserving input order.
@@ -5285,10 +5335,26 @@ impl VaultRegistry {
     }
 
     fn load(env: &Env, id: &String) -> Result<Resource, Error> {
-        env.storage()
+        let resource: Resource = env
+            .storage()
             .persistent()
             .get(&DataKey::Resource(id.clone()))
-            .ok_or(Error::NotFound)
+            .ok_or(Error::NotFound)?;
+        Self::ensure_supported_resource_schema(&resource)?;
+        Ok(resource)
+    }
+
+    /// Admit only the current layout and one explicitly supported predecessor.
+    /// This guard runs before every normal resource mutation because those
+    /// methods load through `load`; `save` then upgrades v6 to the current v7.
+    fn ensure_supported_resource_schema(resource: &Resource) -> Result<(), Error> {
+        if resource.schema_version == RESOURCE_SCHEMA_VERSION
+            || resource.schema_version == PREVIOUS_RESOURCE_SCHEMA_VERSION
+        {
+            Ok(())
+        } else {
+            Err(Error::UnsupportedResourceSchema)
+        }
     }
 
     /// Remember `moderator` as the last to act on `id`'s moderation state.
@@ -5299,6 +5365,10 @@ impl VaultRegistry {
     }
 
     fn save(env: &Env, resource: &mut Resource) {
+        // A write is the migration boundary. Values from the supported prior
+        // layout are normalized to this deployment's layout atomically with
+        // the requested mutation; unsupported values never reach this point.
+        resource.schema_version = RESOURCE_SCHEMA_VERSION;
         resource.version = resource.version.checked_add(1).unwrap_or(resource.version);
         resource.updated_at = env.ledger().sequence();
         let key = DataKey::Resource(resource.id.clone());
@@ -5483,13 +5553,28 @@ impl VaultRegistry {
         id: &String,
         listed: bool,
     ) {
+        // Rewrite each side once. Removing every occurrence repairs any stale
+        // duplicate left by an old transfer, while the destination insert is
+        // idempotent so A→B→C transitions cannot accumulate duplicate ids.
         Self::remove_from_creator_index(env, previous_owner, id);
-        let prev_count = Self::creator_count(env, previous_owner);
-        Self::set_creator_count(env, previous_owner, prev_count.saturating_sub(1));
-
-        Self::append_to_creator_index(env, new_owner, id.clone());
-        let new_count = Self::creator_count(env, new_owner);
-        Self::set_creator_count(env, new_owner, new_count + 1);
+        let mut destination = Self::creator_list(env, new_owner);
+        let mut found = false;
+        for i in 0..destination.len() {
+            if destination.get(i).unwrap() == *id {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            destination.push_back(id.clone());
+            let key = Self::creator_key(env, new_owner);
+            env.storage().persistent().set(&key, &destination);
+            Self::bump_persistent(env, &key);
+        }
+        // Counts are derived from the rewritten indexes so a repeated
+        // transfer also repairs a historical stale count.
+        Self::set_creator_count(env, previous_owner, Self::creator_list(env, previous_owner).len());
+        Self::set_creator_count(env, new_owner, destination.len());
 
         // A listed resource changing hands is one fewer listed for the previous
         // owner and one more for the new one; the global count is unchanged.
