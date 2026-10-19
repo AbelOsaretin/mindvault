@@ -139,25 +139,57 @@ export function computeBackoffDelay(
 }
 
 /**
+ * Parse a Retry-After header value into an **uncapped** wait in milliseconds,
+ * or null when the header is absent, empty, or unparseable.
+ *
+ * RFC 7231 §7.1.3 allows two forms and this accepts both:
+ *
+ *   - `delay-seconds` — a non-negative integer count of seconds.
+ *   - `HTTP-date` — an absolute timestamp (IMF-fixdate, RFC 850, or asctime).
+ *
+ * A date already in the past yields `0`: the retry may proceed immediately.
+ * Nothing here bounds the result — a hostile `Retry-After: 999999` or a date
+ * years in the future parses to a huge number. Callers must clamp
+ * ({@link retryAfterDelay} does).
+ */
+export function parseRetryAfterMs(
+  headerValue: string | null | undefined,
+  now: number = Date.now(),
+): number | null {
+  if (headerValue == null) return null;
+  const trimmed = headerValue.trim();
+  if (trimmed === "") return null;
+
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.floor(seconds * 1000);
+  }
+
+  const date = Date.parse(trimmed);
+  if (Number.isNaN(date)) return null;
+  return Math.max(0, date - now);
+}
+
+/**
  * A server-supplied Retry-After (seconds, or an HTTP date) in milliseconds, or
- * null when absent/unparseable. Honouring it is politer than guessing, but it is
- * still clamped to maxDelayMs so a hostile or mistaken header cannot stall a
- * tool call.
+ * null when absent/unparseable.
+ *
+ * Honouring the header is politer than guessing at backoff, but it is never
+ * allowed to stall a tool call: the result is clamped to the retry policy's
+ * `maxDelayMs` and, when a tool deadline is supplied, to that too — so an
+ * extreme value, a far-future date, or a hostile header degrades to the cap
+ * rather than an unbounded sleep. A past date clamps to `0`.
  */
 export function retryAfterDelay(
   headerValue: string | null | undefined,
   policy: RetryPolicy,
   now: number = Date.now(),
+  deadlineMs: number = Infinity,
 ): number | null {
-  if (!headerValue) return null;
-  const trimmed = headerValue.trim();
-  const seconds = Number(trimmed);
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return Math.min(Math.floor(seconds * 1000), policy.maxDelayMs);
-  }
-  const date = Date.parse(trimmed);
-  if (Number.isNaN(date)) return null;
-  return Math.min(Math.max(0, date - now), policy.maxDelayMs);
+  const parsed = parseRetryAfterMs(headerValue, now);
+  if (parsed === null) return null;
+  const cap = Math.max(0, Math.min(policy.maxDelayMs, deadlineMs));
+  return Math.min(parsed, cap);
 }
 
 /** What happened on one failed attempt, for logging. */
@@ -194,6 +226,15 @@ export interface RetryOptions<T> {
   delayFromResult?: (result: T) => number | null;
   /** Called after each failed attempt that will be retried. */
   onRetry?: (info: RetryAttemptInfo) => void;
+  /**
+   * Awaited before every attempt, including the first.
+   *
+   * The hook exists for cross-call coordination: a per-origin rate-limit
+   * coordinator uses it to hold a call back until the shared backoff for its
+   * origin has elapsed, so concurrent calls do not each retry into the same
+   * server window. It may reject (e.g. on cancellation) to abort the retry.
+   */
+  beforeAttempt?: (attempt: number) => Promise<void>;
   /** Injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
@@ -225,6 +266,7 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions<T
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const isLast = attempt === attempts;
     try {
+      await options.beforeAttempt?.(attempt);
       const result = await fn();
       if (!isLast && options.shouldRetryResult?.(result)) {
         const override = options.delayFromResult?.(result) ?? null;

@@ -395,7 +395,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "mindvault_buy",
     description:
-      "Pay USDC via x402 and access a resource. Payments above MINDVAULT_MAX_AUTO_PAY_USDC (10 USDC by default) require maxAutoPayUsdc set to at least the resource price. On mainnet, pass confirmMainnet: true (or set MINDVAULT_ALLOW_MAINNET=1). Pass dryRun: true to validate the resource and show intended payment flow without submitting payment. Pass wait: true to poll the payment transaction until it settles on-chain before returning.",
+      'Pay USDC via x402 and access a resource. Payments above MINDVAULT_MAX_AUTO_PAY_USDC (10 USDC by default) require maxAutoPayUsdc set to at least the resource price. On mainnet, pass confirmMainnet: true (or set MINDVAULT_ALLOW_MAINNET=1). Pass dryRun: true to validate the resource and show intended payment flow without submitting payment. Pass waitPolicy: "wait-for-final-result" (or wait: true) to poll the payment transaction until it settles on-chain before returning; the default "return-after-submit" returns immediately with the tx hash and current status.',
     inputSchema: {
       type: "object",
       properties: {
@@ -425,7 +425,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         wait: {
           type: "boolean",
           description:
-            "Optional flag. When true, wait and poll the payment transaction on Soroban until it settles (SUCCESS or FAILED) or the timeout elapses, returning a settlement confirmation block. Off by default, in which case the buy returns as soon as the payment response arrives.",
+            'Optional flag. When true, wait and poll the payment transaction on Soroban until it settles (SUCCESS or FAILED) or the timeout elapses, returning a settlement confirmation block. Off by default, in which case the buy returns as soon as the payment response arrives. Legacy shorthand for waitPolicy: "wait-for-final-result".',
+        },
+        waitPolicy: {
+          type: "string",
+          enum: ["return-after-submit", "wait-for-final-result"],
+          description:
+            'How long to wait for the payment transaction before returning. "return-after-submit" (default) returns as soon as the payment is submitted, reporting the tx hash and any status already known; "wait-for-final-result" polls until the transaction reaches a terminal status or timeoutMs elapses. Takes precedence over wait when both are set.',
+          examples: ["return-after-submit", "wait-for-final-result"],
         },
         timeoutMs: {
           type: "integer",

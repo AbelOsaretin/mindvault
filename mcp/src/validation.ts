@@ -33,7 +33,11 @@ import { REGISTRY_LIST_MAX_LIMIT } from "./registryPagination.js";
 import { RECEIPT_EXPORT_MAX_LIMIT } from "./receipts.js";
 import { DEBUG_BUNDLE_MAX_AUDIT_LINES } from "./debugBundleSchema.js";
 import { TOOL_DEFINITIONS } from "./tools.js";
-import { MAX_SETTLEMENT_TIMEOUT_MS, MIN_SETTLEMENT_INTERVAL_MS } from "./settlement.js";
+import {
+  MAX_SETTLEMENT_TIMEOUT_MS,
+  MIN_SETTLEMENT_INTERVAL_MS,
+  TRANSACTION_WAIT_POLICIES,
+} from "./settlement.js";
 
 // ── Spec model ────────────────────────────────────────────────────────────────
 
@@ -299,6 +303,7 @@ export const TOOL_ARGUMENT_SPECS: Record<string, ToolArgumentSpec> = {
     confirmMainnet: CONFIRM_MAINNET,
     confirmPaid: CONFIRM_PAID,
     wait: { kind: "flag" },
+    waitPolicy: { kind: "enum", values: TRANSACTION_WAIT_POLICIES },
     timeoutMs: {
       kind: "integer",
       min: 0,
