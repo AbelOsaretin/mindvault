@@ -647,8 +647,20 @@ exports[`tool schema snapshots > mindvault_buy > input schema 1`] = `
       "type": "integer",
     },
     "wait": {
-      "description": "Optional flag. When true, wait and poll the payment transaction on Soroban until it settles (SUCCESS or FAILED) or the timeout elapses, returning a settlement confirmation block. Off by default, in which case the buy returns as soon as the payment response arrives.",
+      "description": "Optional flag. When true, wait and poll the payment transaction on Soroban until it settles (SUCCESS or FAILED) or the timeout elapses, returning a settlement confirmation block. Off by default, in which case the buy returns as soon as the payment response arrives. Legacy shorthand for waitPolicy: \\"wait-for-final-result\\".",
       "type": "boolean",
+    },
+    "waitPolicy": {
+      "description": "How long to wait for the payment transaction before returning. \\"return-after-submit\\" (default) returns as soon as the payment is submitted, reporting the tx hash and any status already known; \\"wait-for-final-result\\" polls until the transaction reaches a terminal status or timeoutMs elapses. Takes precedence over wait when both are set.",
+      "enum": [
+        "return-after-submit",
+        "wait-for-final-result",
+      ],
+      "examples": [
+        "return-after-submit",
+        "wait-for-final-result",
+      ],
+      "type": "string",
     },
   },
   "required": [
@@ -666,13 +678,23 @@ exports[`tool schema snapshots > mindvault_buy > output schema 1`] = `
         {
           "description": "mindvault_buy result: the purchase diff plus a settlement-confirmation block describing how far the payment transaction got before returning.",
           "properties": {
-            "after": {},
-            "before": {},
-            "changedFields": {
-              "items": {
-                "type": "string",
-              },
-              "type": "array",
+            "attempts": {
+              "type": "integer",
+            },
+            "cancelled": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "polled": {
+              "type": "boolean",
+            },
+            "settled": {
+              "type": "boolean",
+            },
+            "skipped": {
+              "type": "boolean",
             },
             "failureGuidance": {
               "type": [
@@ -735,13 +757,26 @@ exports[`tool schema snapshots > mindvault_buy > output schema 1`] = `
                 "null",
               ],
             },
+            "waitPolicy": {
+              "enum": [
+                "return-after-submit",
+                "wait-for-final-result",
+              ],
+              "type": "string",
+            },
           },
           "required": [
-            "before",
-            "after",
-            "changedFields",
+            "polled",
+            "waitPolicy",
             "txHash",
-            "settlement",
+            "status",
+            "settled",
+            "success",
+            "timedOut",
+            "cancelled",
+            "attempts",
+            "skipped",
+            "message",
           ],
           "type": "object",
         },

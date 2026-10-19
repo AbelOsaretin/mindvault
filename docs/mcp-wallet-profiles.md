@@ -9,6 +9,15 @@ time, and every tool operates on the active profile.
 Profiles are persisted to `~/.mindvault/state.json` (mode `0600`) and reloaded on
 restart. Secret keys are never shown in tool output.
 
+## Credentials-free team setup
+
+`mindvault_export_profiles` returns a versioned `mindvault.profile-export`
+payload containing profile names, network values, and non-secret preferences.
+It never includes wallet secret keys, seed phrases, private keys, or publisher
+API keys. Pass that JSON to `mindvault_import_profiles` on another installation.
+Import merges metadata and preferences and preserves any existing credentials;
+it cannot overwrite wallet or API-key fields.
+
 ## Tools
 
 | Tool                      | What it does                                                                                                                                                                              |

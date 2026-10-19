@@ -120,6 +120,8 @@ import {
   DEFAULT_PROFILE,
   isValidProfileName,
   migrateState,
+  exportProfileState,
+  importProfileState,
   STATE_VERSION,
   type AgentWallet,
   type ProfileState,
@@ -144,6 +146,7 @@ import {
   type ResourceSubscriptionSnapshot,
 } from "./resourceSubscriptionTool.js";
 import { type ApiResponse } from "./apiResponse.js";
+import { readBoundedResponse, resolveMaxResponseBytes } from "./responseSize.js";
 import { safeErrorMessage, safeLog } from "./redaction.js";
 import {
   assertAutoPaymentWithinCeiling,
@@ -161,6 +164,7 @@ import {
   exportStateFile,
   restoreState,
   checkStatePermissions,
+  compareStateWithBackup,
   preserveLegacyState,
   quarantineStateFile,
   writeAtomically,
@@ -170,9 +174,7 @@ import { logger } from "./logger.js";
 import {
   buildSettlementSnapshot,
   estimateSettlementSteps,
-  normalizeSettlementIntervalMs,
-  normalizeSettlementTimeoutMs,
-  normalizeSettlementWaitFlag,
+  resolveTransactionWait,
   pollSettlement,
   type SettlementSnapshot,
   type TransactionLookup,
@@ -201,6 +203,7 @@ import {
   withRetry,
   type RetryAttemptInfo,
 } from "./retry.js";
+import { createRateLimitCoordinator } from "./rateLimitCoordinator.js";
 import {
   mapHttpError,
   mapRegistryError,
@@ -322,14 +325,22 @@ const logRetry = process.env.VITEST
   ? undefined
   : (info: RetryAttemptInfo) => logger.info(`MindVault MCP: ${formatRetryLog(info)}`);
 
-function httpRetryOptions(label: string) {
+const RATE_LIMITS = createRateLimitCoordinator();
+
+function httpRetryOptions(label: string, url?: string) {
   return {
     policy: RETRY_POLICY,
     label,
     shouldRetryResult: (res: Response) => isRetryableStatus(res.status),
     describeResult: (res: Response) => `HTTP ${res.status}`,
-    delayFromResult: (res: Response) =>
-      retryAfterDelay(res.headers?.get?.("retry-after"), RETRY_POLICY),
+    delayFromResult: (res: Response) => {
+      const delay = retryAfterDelay(res.headers?.get?.("retry-after"), RETRY_POLICY);
+      // Share a server-supplied 429 backoff with every other in-flight call to
+      // the same origin (#1069). A 429 without Retry-After records nothing.
+      if (url && res.status === 429) RATE_LIMITS.noteRateLimit(url, delay);
+      return delay;
+    },
+    beforeAttempt: url ? () => RATE_LIMITS.acquire(url) : undefined,
     onRetry: logRetry,
   };
 }
@@ -344,7 +355,7 @@ function sorobanRpcFetch(init: RequestInit, label: string): Promise<Response> {
   };
   return withRetry(
     () => fetchWithTimeout(httpFetch, SOROBAN_RPC_URL, initWithUA, "soroban", TIMEOUTS.soroban),
-    httpRetryOptions(label),
+    httpRetryOptions(label, SOROBAN_RPC_URL),
   );
 }
 
@@ -414,6 +425,10 @@ export function restoreStateTool(blob: string, passphrase: string): string {
   return restoreState(blob, passphrase, applyRestoredState, {
     expectedNetwork: NETWORK,
   });
+}
+
+export function compareStateBackupTool(blob: string, passphrase: string): string {
+  return JSON.stringify(compareStateWithBackup(blob, passphrase), null, 2);
 }
 
 function quarantineCorruptState(reason: string, detail: string): void {
@@ -573,7 +588,7 @@ async function checkDependency(
   try {
     const res = await withRetry(
       () => fetchWithTimeout(httpFetch, url, initWithUA, "http", TIMEOUTS.http),
-      httpRetryOptions(`health:${name}`),
+      httpRetryOptions(`health:${name}`, url),
     );
     if (res.ok) {
       return { name, ok: true, message: `Reachable (HTTP ${res.status})` };
@@ -854,7 +869,7 @@ async function jsonFetch(url: string, init?: RequestInit): Promise<ApiResponse<a
         TIMEOUTS[service],
       );
     res = isIdempotentMethod(method)
-      ? await withRetry(call, httpRetryOptions(`${method} ${new URL(url).pathname}`))
+      ? await withRetry(call, httpRetryOptions(`${method} ${new URL(url).pathname}`, url))
       : await call();
   } catch (err) {
     const source = sourceForUrl(url);
@@ -865,7 +880,7 @@ async function jsonFetch(url: string, init?: RequestInit): Promise<ApiResponse<a
   res.headers.forEach((value, key) => {
     responseHeaders[key.toLowerCase()] = value;
   });
-  const text = await res.text();
+  const text = await readBoundedResponse(res, resolveMaxResponseBytes());
   try {
     return { ok: res.ok, status: res.status, data: JSON.parse(text), headers: responseHeaders };
   } catch {
@@ -963,7 +978,7 @@ async function getBalanceDetails(publicKey: string): Promise<BalanceDetails> {
           "horizon",
           TIMEOUTS.horizon,
         ),
-      httpRetryOptions("GET horizon /accounts"),
+      httpRetryOptions("GET horizon /accounts", `${HORIZON_URL}/accounts/${publicKey}`),
     );
   } catch (err) {
     throw mcpError(
@@ -1082,7 +1097,7 @@ async function getAccountBalances(
         "horizon",
         TIMEOUTS.horizon,
       ),
-    httpRetryOptions("GET horizon /accounts"),
+    httpRetryOptions("GET horizon /accounts", `${HORIZON_URL}/accounts/${publicKey}`),
   );
   if (!res.ok) return { usdc: "0", native: "0", funded: false };
   const data: any = await res.json();
@@ -1795,6 +1810,35 @@ export function listProfiles(): string {
   return outcomeText(listProfilesOutcome());
 }
 
+export function exportProfilesOutcome(): ToolOutcome {
+  const payload = exportProfileState({
+    version: STATE_VERSION,
+    activeProfile: activeProfileName,
+    profiles,
+  });
+  return { text: JSON.stringify(payload, null, 2), structured: payload };
+}
+
+export function importProfilesOutcome(data: string): ToolOutcome {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    throw new Error("Profile export must be valid JSON.");
+  }
+  const result = importProfileState(
+    { version: STATE_VERSION, activeProfile: activeProfileName, profiles },
+    parsed,
+  );
+  profiles = result.state.profiles;
+  activeProfileName = result.state.activeProfile;
+  saveState();
+  return {
+    text: `Imported ${result.imported.length} profile setup(s) without changing credentials.`,
+    structured: { imported: result.imported },
+  };
+}
+
 /**
  * Whether a failed catalog read should fall back to the offline snapshot (#837).
  *
@@ -2272,6 +2316,8 @@ export async function buy(
   wait?: unknown,
   timeoutMs?: unknown,
   intervalMs?: unknown,
+  waitPolicy?: unknown,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (dryRun) {
     const initialDryRun = dryRunBuy(
@@ -2380,17 +2426,21 @@ export async function buy(
     logger.error("MindVault MCP: failed to persist purchase receipt:", safeErrorMessage(err));
   }
 
-  // Settlement confirmation (#888): when the caller passes wait: true we poll
-  // the payment transaction until it settles or the deadline passes. The
-  // progress counter continues after step 3 and stays monotonic while the
-  // poller reports; without wait the counter is untouched and the summary
-  // simply carries an un-polled settlement block.
-  const waitForSettlement = normalizeSettlementWaitFlag(wait);
-  const settleTimeoutMs = normalizeSettlementTimeoutMs(timeoutMs);
-  const settleIntervalMs = normalizeSettlementIntervalMs(intervalMs);
+  // Settlement confirmation (#888, #1058): the caller chooses a wait policy.
+  // `return-after-submit` returns as soon as the payment response arrives and
+  // reports the hash plus whatever status is known; `wait-for-final-result`
+  // polls the transaction until it settles or the (bounded) deadline passes.
+  // `wait: true` is still accepted and mapped onto `wait-for-final-result` for
+  // existing clients. The progress counter continues after step 3 and stays
+  // monotonic while the poller reports.
+  const waitOptions = resolveTransactionWait({ waitPolicy, wait, timeoutMs, intervalMs });
+  const waitForSettlement = waitOptions.wait;
+  const settleTimeoutMs = waitOptions.timeoutMs;
+  const settleIntervalMs = waitOptions.intervalMs;
   let settlement: SettlementSnapshot = buildSettlementSnapshot({
     txHash,
     wait: waitForSettlement,
+    waitPolicy: waitOptions.policy,
     skipped: waitForSettlement && !txHash,
     result: null,
   });
@@ -2413,10 +2463,12 @@ export async function buy(
         await onProgress?.(4 + p, 4 + (total ?? settleSteps), message);
       },
       sleep: sleepMs,
+      signal,
     });
     settlement = buildSettlementSnapshot({
       txHash,
       wait: true,
+      waitPolicy: waitOptions.policy,
       skipped: false,
       result,
     });
@@ -3970,6 +4022,10 @@ async function dispatchToolOutcome(
         );
       case "mindvault_list_profiles":
         return listProfilesOutcome();
+      case "mindvault_export_profiles":
+        return exportProfilesOutcome();
+      case "mindvault_import_profiles":
+        return importProfilesOutcome(requiredString(args, "data"));
       case "mindvault_browse": {
         const parsed = parseCatalogFilters(rawRecord);
         return parsed.ok ? browseOutcome(parsed.filters) : parsed.error;
@@ -4039,6 +4095,7 @@ async function dispatchToolOutcome(
           args.wait,
           args.timeoutMs,
           args.intervalMs,
+          args.waitPolicy,
         );
       case "mindvault_buy_lease":
         return buyLease(requiredString(args, "resourceId"), requiredString(args, "tier"), {
@@ -4123,6 +4180,11 @@ async function dispatchToolOutcome(
         return resetState(flag(args, "all"), rawRecord.confirm);
       case "mindvault_backup_state":
         return backupState(requiredString(args, "passphrase"), rawRecord.confirm);
+      case "mindvault_compare_state_backup":
+        return compareStateBackupTool(
+          requiredString(args, "blob"),
+          requiredString(args, "passphrase"),
+        );
       case "mindvault_resource_provenance":
         return provenanceChain(requiredString(args, "resourceId"));
       case "mindvault_resource_change_log":

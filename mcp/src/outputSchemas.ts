@@ -248,22 +248,26 @@ export const SETTLEMENT_SCHEMA = {
   type: "object",
   properties: {
     polled: { type: "boolean" },
+    waitPolicy: { type: "string", enum: ["return-after-submit", "wait-for-final-result"] },
     txHash: { type: ["string", "null"] },
     status: { type: ["string", "null"] },
     settled: { type: "boolean" },
     success: { type: "boolean" },
     timedOut: { type: "boolean" },
+    cancelled: { type: "boolean" },
     attempts: { type: "integer" },
     skipped: { type: "boolean" },
     message: { type: "string" },
   },
   required: [
     "polled",
+    "waitPolicy",
     "txHash",
     "status",
     "settled",
     "success",
     "timedOut",
+    "cancelled",
     "attempts",
     "skipped",
     "message",
@@ -811,4 +815,38 @@ export const RESOURCE_SUBSCRIPTION_OUTPUT_SCHEMA = {
     message: { type: "string" },
   },
   required: ["resourceId"],
+} as const;
+
+/** Output schema for credentials-free profile export/import. */
+export const PROFILE_EXPORT_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    schema: { type: "string", const: "mindvault.profile-export" },
+    version: { type: "integer", const: 1 },
+    activeProfile: { type: "string" },
+    profiles: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          network: { type: "string", enum: ["testnet", "mainnet"] },
+          preferences: {
+            type: "object",
+            propertyNames: { pattern: "^(?!.*(secret|private|seed|credential|apikey|token|password)).*$" },
+            additionalProperties: { type: ["string", "number", "boolean", "null"] },
+          },
+        },
+        required: ["name", "preferences"],
+      },
+    },
+  },
+  required: ["schema", "version", "activeProfile", "profiles"],
+} as const;
+
+export const PROFILE_IMPORT_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: { imported: { type: "array", items: { type: "string" } } },
+  required: ["imported"],
 } as const;
