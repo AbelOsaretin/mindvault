@@ -145,7 +145,8 @@ describe("mindvault://server/status through the MCP server", () => {
     const { contents } = await client.readResource({ uri: SERVER_STATUS_URI });
     expect(contents).toHaveLength(1);
     expect(contents[0].mimeType).toBe("application/json");
-    return { raw: String(contents[0].text), status: JSON.parse(String(contents[0].text)) };
+    const raw = String((contents[0] as { text: string }).text);
+    return { raw, status: JSON.parse(raw) };
   }
 
   const tick = () => new Promise((resolve) => setTimeout(resolve, 20));

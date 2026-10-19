@@ -140,7 +140,7 @@ export function enforceOutputContract<R extends ToolCallResult>(
   result: R,
   schema: Record<string, unknown> | undefined,
   log: (message: string) => void = (message) => logger.error(message),
-): R | ToolCallResult {
+): ToolCallResult {
   const violation = outputContractViolation(result, schema);
   if (violation === undefined) return result;
 

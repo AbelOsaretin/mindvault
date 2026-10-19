@@ -39,8 +39,14 @@ exports[`tool schema snapshots > mindvault_accept_transfer > output schema 1`] =
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -51,11 +57,47 @@ exports[`tool schema snapshots > mindvault_accept_transfer > output schema 1`] =
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -1110,8 +1152,14 @@ exports[`tool schema snapshots > mindvault_cancel_transfer > output schema 1`] =
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -1122,11 +1170,47 @@ exports[`tool schema snapshots > mindvault_cancel_transfer > output schema 1`] =
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -2419,8 +2503,14 @@ exports[`tool schema snapshots > mindvault_freeze > output schema 1`] = `
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -2431,11 +2521,47 @@ exports[`tool schema snapshots > mindvault_freeze > output schema 1`] = `
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -3832,6 +3958,34 @@ exports[`tool schema snapshots > mindvault_publish_batch > output schema 1`] = `
         },
         "requested": {
           "type": "number",
+        },
+        "statusLookup": {
+          "properties": {
+            "arguments": {
+              "properties": {
+                "txHash": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "txHash",
+              ],
+              "type": "object",
+            },
+            "retryable": {
+              "type": "boolean",
+            },
+            "tool": {
+              "const": "mindvault_tx_status",
+              "type": "string",
+            },
+          },
+          "required": [
+            "tool",
+            "arguments",
+            "retryable",
+          ],
+          "type": "object",
         },
         "txHash": {
           "type": [
@@ -5332,8 +5486,14 @@ exports[`tool schema snapshots > mindvault_royalty > output schema 1`] = `
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -5344,11 +5504,47 @@ exports[`tool schema snapshots > mindvault_royalty > output schema 1`] = `
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -5780,8 +5976,14 @@ exports[`tool schema snapshots > mindvault_set_listed > output schema 1`] = `
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -5792,11 +5994,47 @@ exports[`tool schema snapshots > mindvault_set_listed > output schema 1`] = `
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -5970,8 +6208,14 @@ exports[`tool schema snapshots > mindvault_set_price > output schema 1`] = `
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -5982,11 +6226,47 @@ exports[`tool schema snapshots > mindvault_set_price > output schema 1`] = `
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -6403,8 +6683,14 @@ exports[`tool schema snapshots > mindvault_transfer_ownership > output schema 1`
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -6415,11 +6701,47 @@ exports[`tool schema snapshots > mindvault_transfer_ownership > output schema 1`
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -6731,8 +7053,14 @@ exports[`tool schema snapshots > mindvault_update_metadata > output schema 1`] =
       "oneOf": [
         {
           "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
             "listed": {
               "type": "boolean",
+            },
+            "message": {
+              "type": "string",
             },
             "metadata": {
               "type": "string",
@@ -6743,11 +7071,47 @@ exports[`tool schema snapshots > mindvault_update_metadata > output schema 1`] =
             "price": {
               "type": "string",
             },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
             "resourceId": {
               "type": "string",
             },
             "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
               "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [

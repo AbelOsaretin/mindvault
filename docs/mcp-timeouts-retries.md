@@ -203,6 +203,56 @@ status. Fields only the failed endpoint carries come back `null` — the
 `verification` details when `/verification` failed, `onchainStatus` and
 `onchainTxHash` when `/meta` did.
 
+### A submitted transaction that cannot be confirmed
+
+Registry mutations (`mindvault_update_metadata`, `mindvault_set_price`,
+`mindvault_transfer_ownership`, `mindvault_set_listed`, `mindvault_set_tags`)
+and the `register_batch` step of `mindvault_publish_batch` sign a transaction,
+submit it with `sendTransaction`, then poll `getTransaction` until it lands.
+A submit is never retried. It is not idempotent, and a second submit would be
+a second transaction.
+
+If the poll times out, or the RPC goes away after the network accepted the
+transaction, the outcome is unknown but the transaction hash is known. The tool
+does not report a failure, because an agent would answer a failure by
+submitting again. It returns the hash with a lookup the agent can repeat
+safely (#1060):
+
+```json
+{
+  "status": "submitted",
+  "resourceId": "cm7x8y9z",
+  "price": "2.5",
+  "txHash": "c0ffee…",
+  "confirmed": false,
+  "reason": "rpc_unavailable",
+  "statusLookup": {
+    "tool": "mindvault_tx_status",
+    "arguments": { "txHash": "c0ffee…" },
+    "retryable": true
+  },
+  "message": "Set price: Transaction c0ffee… was submitted but its status could not be read from the RPC. Do not resubmit — call mindvault_tx_status with this txHash (safe to repeat) until it reports SUCCESS or FAILED."
+}
+```
+
+- `reason` is `confirmation_timeout` when the poll deadline passed with the
+  transaction still `NOT_FOUND`, and `rpc_unavailable` when the RPC failed
+  mid-poll.
+- `mindvault_publish_batch` returns its usual summary with
+  `onchainStatus: "submitted"`, each approved item's `onchainStatus` set to
+  `"submitted"`, the `txHash`, and the same `statusLookup`. The items were
+  already created and paid for, so they are reported instead of discarded.
+- `mindvault_set_tags` is text-only. Its text names the hash and says to check
+  it with `mindvault_tx_status`.
+- A confirmed transaction still returns `status: "success"`. A transaction the
+  network rejected, or an RPC that was down before submit, still fails as
+  before. In those cases nothing was submitted, so retrying is safe.
+
+The hash is captured from the SDK's `onSubmitted` hook in
+[`mcp/src/submittedTransaction.ts`](../mcp/src/submittedTransaction.ts). The
+`status`, `confirmed`, `reason`, `statusLookup`, and `message` fields are part
+of the advertised output schemas.
+
 ### Observability
 
 Each retry writes one greppable line to stderr:
@@ -223,6 +273,11 @@ MindVault MCP: retrying GET /resources — attempt 2/3 failed (HTTP 503); next a
   `Retry-After`, and the retry-log format, with sleep and randomness injected
 - [`mcp/src/toolRetries.test.ts`](../mcp/src/toolRetries.test.ts) — real tools
   recovering from transient failures, and payments issued exactly once
+- [`mcp/src/submittedTransaction.test.ts`](../mcp/src/submittedTransaction.test.ts)
+  and [`mcp/src/tools/publishBatchUnconfirmed.test.ts`](../mcp/src/tools/publishBatchUnconfirmed.test.ts) —
+  RPC loss and poll timeout after submit, run through the SDK's own
+  `SentTransaction`, return the hash and a `mindvault_tx_status` lookup
+  instead of an error
 - [`mcp/src/publishStatusRetry.test.ts`](../mcp/src/publishStatusRetry.test.ts) —
   `mindvault_publish_status` stopping at a terminal status while a companion
   request exhausts its retries

@@ -28,6 +28,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { listCatalogResources, readCatalogResource } from "./catalogResources.js";
 import {
+  SubmittedTransactionUnconfirmed,
+  signAndSendTracked,
+  submittedUnconfirmedResult,
+} from "./submittedTransaction.js";
+import {
   SERVER_STATUS_URI,
   createServerStatusWatcher,
   serverStatusContents,
@@ -2611,17 +2616,29 @@ export async function updateMetadata(resourceId: string, metadata: string): Prom
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Update metadata", resourceId, err, { metadata }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Update metadata submission failed for resource "${resourceId}"`,
@@ -2630,7 +2647,6 @@ export async function updateMetadata(resourceId: string, metadata: string): Prom
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "metadata",
@@ -2700,17 +2716,29 @@ export async function setPrice(resourceId: string, price: string): Promise<strin
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Set price", resourceId, err, { price }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set price submission failed for resource "${resourceId}"`,
@@ -2719,7 +2747,6 @@ export async function setPrice(resourceId: string, price: string): Promise<strin
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "price",
@@ -2787,17 +2814,29 @@ export async function transferOwnership(resourceId: string, newCreator: string):
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Transfer ownership", resourceId, err, { newCreator }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Transfer ownership submission failed for resource "${resourceId}"`,
@@ -2806,7 +2845,6 @@ export async function transferOwnership(resourceId: string, newCreator: string):
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "transferred",
@@ -2874,17 +2912,29 @@ export async function setListed(resourceId: string, listed: boolean): Promise<st
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Set listed", resourceId, err, { listed }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set listed submission failed for resource "${resourceId}"`,
@@ -2893,7 +2943,6 @@ export async function setListed(resourceId: string, listed: boolean): Promise<st
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   return JSON.stringify(
     {
       status: "success",
@@ -2953,17 +3002,30 @@ export async function setTags(resourceId: string, tags: string[]): Promise<strin
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return [
+        `Tags submitted for resource "${resourceId}" but not confirmed.`,
+        `Tags: ${tags.length > 0 ? tags.join(", ") : "(none)"}`,
+        `Tx hash: ${err.txHash}`,
+        submittedUnconfirmedResult("Set tags", resourceId, err).message,
+      ].join("\n");
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set tags submission failed for resource "${resourceId}"`,
@@ -2972,7 +3034,6 @@ export async function setTags(resourceId: string, tags: string[]): Promise<strin
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   return [
     `Tags updated for resource "${resourceId}".`,
     `Tags: ${tags.length > 0 ? tags.join(", ") : "(none)"}`,
