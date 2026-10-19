@@ -37,6 +37,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { attachCorrelationId, correlationSuffix, withNewCorrelationId } from "./correlation.js";
+import { enforceOutputContract } from "./outputValidation.js";
 import { scopeProgressToRequest, sequenceProgressNotifications } from "./progress.js";
 
 /** Anything the MCP SDK will accept in `server.connect`. */
@@ -155,20 +156,32 @@ export function createMindVaultServer(
         ? scopeProgressToRequest(
             behaviour.createProgressEmitter(
               token,
-              sequenceProgressNotifications(extra.sendNotification),
+              sequenceProgressNotifications(extra.sendNotification) as (
+                notification: unknown,
+              ) => Promise<void>,
             ),
           )
         : undefined;
+
+    // Results are checked against the schema the tool advertises before they
+    // are sent, exactly as a client will check them (#1062).
+    const outputSchema = behaviour.listTools().find((tool) => tool.name === name)?.outputSchema as
+      | Record<string, unknown>
+      | undefined;
 
     return withNewCorrelationId(async (correlationId) => {
       try {
         const text = await behaviour.dispatchTool(name, args, progress?.emit);
         const structured = behaviour.structuredResult?.(name, text);
         return attachCorrelationId(
-          {
-            content: [{ type: "text", text }],
-            ...(structured ? { structuredContent: structured } : {}),
-          },
+          enforceOutputContract(
+            name,
+            {
+              content: [{ type: "text" as const, text }],
+              ...(structured ? { structuredContent: structured } : {}),
+            },
+            outputSchema,
+          ),
           correlationId,
         );
       } catch (error) {
@@ -177,13 +190,20 @@ export function createMindVaultServer(
         // The ID goes into the error text as well as `_meta`: a failure is the
         // one case where a human is likely to quote it back.
         return attachCorrelationId(
-          {
-            content: [
-              { type: "text", text: `Error: ${message}${correlationSuffix(correlationId)}` },
-            ],
-            isError: true,
-            ...(extraContent ? { structuredContent: extraContent } : {}),
-          },
+          enforceOutputContract(
+            name,
+            {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Error: ${message}${correlationSuffix(correlationId)}`,
+                },
+              ],
+              isError: true,
+              ...(extraContent ? { structuredContent: extraContent } : {}),
+            },
+            outputSchema,
+          ),
           correlationId,
         );
       } finally {

@@ -82,7 +82,8 @@ import { exportReceiptsTool } from "./receipts.js";
 import { debugBundleTool } from "./debugBundle.js";
 import { exportReceiptsToolWithTimeout } from "./receipts.js";
 import { normalizeToolResult, outcomeText, type ToolOutcome } from "./toolResult.js";
-import { advertisedTools, hasOutputSchema } from "./toolSurface.js";
+import { advertisedTools, hasOutputSchema, outputSchemaFor } from "./toolSurface.js";
+import { enforceOutputContract } from "./outputValidation.js";
 import { dryRunPublish, dryRunBuy } from "./dryRun.js";
 import { initAuditLogging } from "./auditLog.js";
 import { REGISTRY_LIST_DEFAULT_LIMIT, REGISTRY_LIST_DEFAULT_START } from "./registryPagination.js";
@@ -4166,14 +4167,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     if (metricsExportToConsoleEnabled(process.env) && metrics.enabled) {
       console.error(metricsExportLine(metrics.snapshot(), "otlp"));
     }
-    return normalizeToolResult(name, result, hasOutputSchema);
+    // Checked against the advertised outputSchema before it is sent (#1062).
+    return enforceOutputContract(
+      name,
+      normalizeToolResult(name, result, hasOutputSchema),
+      outputSchemaFor(name),
+    );
   } catch (err: any) {
     const mapped = mappedErrorOf(err);
-    return {
-      content: [{ type: "text", text: `Error: ${safeErrorMessage(err)}` }],
-      isError: true,
-      ...(mapped ? { structuredContent: { troubleshooting: troubleshootingHint(mapped) } } : {}),
-    };
+    return enforceOutputContract(
+      name,
+      {
+        content: [{ type: "text", text: `Error: ${safeErrorMessage(err)}` }],
+        isError: true,
+        ...(mapped ? { structuredContent: { troubleshooting: troubleshootingHint(mapped) } } : {}),
+      },
+      outputSchemaFor(name),
+    );
   } finally {
     await progress?.settle();
   }
