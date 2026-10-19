@@ -16,13 +16,24 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { listCatalogResources, readCatalogResource } from "./catalogResources.js";
+import {
+  SERVER_STATUS_URI,
+  createServerStatusWatcher,
+  serverStatusContents,
+  serverStatusResource,
+  type ServerStatusInput,
+} from "./serverStatusResource.js";
 import { PROMPT_DEFINITIONS, getPrompt } from "./prompts.js";
 import {
   createProgressEmitter,
@@ -50,7 +61,7 @@ import {
   assertPaidOperationConfirmed,
   formatPaidConfirmationDiagnostics,
 } from "./paidOperations.js";
-import { assertToolAllowedInReadOnlyMode } from "./readOnlyMode.js";
+import { assertToolAllowedInReadOnlyMode, readOnlyModeEnabled } from "./readOnlyMode.js";
 import {
   createMetricsRecorder,
   measureTool,
@@ -4112,10 +4123,56 @@ export function normalizeToolResultForTest(name: string, outcome: ToolOutcome) {
   return normalizeToolResult(name, outcome, hasOutputSchema);
 }
 
-const server = new Server(
-  { name: "mindvault", version: "1.0.0" },
-  { capabilities: { tools: {}, prompts: {}, resources: {} } },
-);
+const SERVER_IDENTITY = { name: "mindvault", version: "1.0.0" };
+
+const server = new Server(SERVER_IDENTITY, {
+  capabilities: { tools: {}, prompts: {}, resources: { subscribe: true } },
+});
+
+// ── Server status resource (#1064) ──────────────────────────────────────────
+// mindvault://server/status: the active network, registry contract, tool
+// capability version, and safe operational flags. Built from live values on
+// every read, so it follows profile and network switches; wallet state is
+// reduced to booleans and nothing secret or identifying is included.
+
+function serverStatusInput(): ServerStatusInput {
+  const profile = activeProfile();
+  return {
+    serverName: SERVER_IDENTITY.name,
+    serverVersion: SERVER_IDENTITY.version,
+    stellarNetwork: STELLAR_NETWORK,
+    x402Network: NETWORK,
+    registryContractId: REGISTRY_CONTRACT_ID,
+    networkPassphrase: REGISTRY_NETWORK_PASSPHRASE,
+    tools: advertisedTools(process.env),
+    readOnly: readOnlyModeEnabled(process.env),
+    mock: _isMock(),
+    walletConfigured: !!profile.wallet,
+    publisherRegistered: !!profile.apiKey,
+  };
+}
+
+/** Test helper: the status resource exactly as resources/read returns it. */
+export function readServerStatusForTest() {
+  return serverStatusContents(serverStatusInput());
+}
+
+const serverStatus = createServerStatusWatcher(() => serverStatusContents(serverStatusInput()));
+
+server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  if (!serverStatus.subscribe(request.params.uri)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Only ${SERVER_STATUS_URI} supports subscriptions; catalog resources do not.`,
+    );
+  }
+  return {};
+});
+
+server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  serverStatus.unsubscribe(request.params.uri);
+  return {};
+});
 
 // ── MCP resources (#545) ─────────────────────────────────────────────────────
 // The vault catalog is exposed as resources so agents can discover entries
@@ -4124,11 +4181,15 @@ const server = new Server(
 // return gated content — only the public meta endpoint is consulted.
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: await listCatalogResources(),
+  resources: [serverStatusResource(), ...(await listCatalogResources())],
 }));
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
-  contents: [await readCatalogResource(request.params.uri)],
+  contents: [
+    request.params.uri === SERVER_STATUS_URI
+      ? serverStatusContents(serverStatusInput())
+      : await readCatalogResource(request.params.uri),
+  ],
 }));
 
 // ListTools is derived from TOOL_DEFINITIONS rather than restated here (#596).
@@ -4145,6 +4206,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args = {} } = request.params;
   const progressToken = request.params._meta?.progressToken;
+  // Compared after the call so a subscriber hears about a profile or network
+  // switch (#1064). Only computed while someone is subscribed.
+  const statusBefore = serverStatus.subscribed ? serverStatus.snapshot() : undefined;
   // Settled in `finally`, before the result is returned, so every progress
   // notification for this call goes out ahead of it and none after (#841).
   const progress =
@@ -4186,6 +4250,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     );
   } finally {
     await progress?.settle();
+    if (statusBefore !== undefined && serverStatus.changedSince(statusBefore)) {
+      void server.sendResourceUpdated({ uri: SERVER_STATUS_URI }).catch(() => {});
+    }
   }
 });
 
