@@ -193,6 +193,7 @@ The MCP server also advertises the `resources` capability, so clients can discov
 - `resources/list` → entries with `name` (the title), `description`, and `mimeType: application/json`
 - `resources/read` on a known URI → `{ id, title, description, price, resourceType, verificationStatus, accessUrl }`
 - Unknown URIs and unknown resource ids return deterministic errors, so agents can correct the URI or fall back to `mindvault_browse` / `mindvault_search`
+- `mindvault://server/status` (listed first) is a read-only status document: active network, registry contract ID, tool capability version, and safe operational flags, with no secrets or wallet addresses. It follows profile and network switches and supports `resources/subscribe`. See [mcp-server-status-resource.md](mcp-server-status-resource.md).
 
 If no resource matches, the error message includes the applied filters, for example:
 

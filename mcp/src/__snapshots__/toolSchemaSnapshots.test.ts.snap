@@ -34,85 +34,182 @@ exports[`tool schema snapshots > mindvault_accept_transfer > input schema 1`] = 
 
 exports[`tool schema snapshots > mindvault_accept_transfer > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -140,7 +237,62 @@ exports[`tool schema snapshots > mindvault_agent_status > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_agent_status > output schema 1`] = `
 {
-  "additionalProperties": true,
+  "anyOf": [
+    {
+      "additionalProperties": true,
+      "type": "object",
+    },
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
+    },
+  ],
   "type": "object",
 }
 `;
@@ -306,74 +458,129 @@ exports[`tool schema snapshots > mindvault_browse > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_browse > output schema 1`] = `
 {
-  "properties": {
-    "items": {
-      "items": {
-        "properties": {
-          "accessUrl": {
-            "type": [
-              "string",
-              "null",
+  "anyOf": [
+    {
+      "properties": {
+        "items": {
+          "items": {
+            "properties": {
+              "accessUrl": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "price": {
+                "type": [
+                  "string",
+                  "number",
+                  "null",
+                ],
+              },
+              "tags": {
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+            },
+            "required": [
+              "id",
+              "title",
+              "price",
+              "description",
+              "accessUrl",
+              "tags",
             ],
+            "type": "object",
           },
-          "description": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "id": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "price": {
-            "type": [
-              "string",
-              "number",
-              "null",
-            ],
-          },
-          "tags": {
-            "items": {
+          "type": "array",
+        },
+        "notice": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "truncated": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "items",
+        "notice",
+        "truncated",
+      ],
+      "type": "object",
+    },
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
               "type": "string",
             },
-            "type": "array",
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
           },
-          "title": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
-        "required": [
-          "id",
-          "title",
-          "price",
-          "description",
-          "accessUrl",
-          "tags",
-        ],
-        "type": "object",
       },
-      "type": "array",
-    },
-    "notice": {
-      "type": [
-        "string",
-        "null",
+      "required": [
+        "troubleshooting",
       ],
+      "type": "object",
     },
-    "truncated": {
-      "type": "boolean",
-    },
-  },
-  "required": [
-    "items",
-    "notice",
-    "truncated",
   ],
   "type": "object",
 }
@@ -465,25 +672,11 @@ exports[`tool schema snapshots > mindvault_buy > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_buy > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "description": "mindvault_buy result: the purchase diff plus a settlement-confirmation block describing how far the payment transaction got before returning.",
-      "properties": {
-        "after": {},
-        "before": {},
-        "changedFields": {
-          "items": {
-            "type": "string",
-          },
-          "type": "array",
-        },
-        "failureGuidance": {
-          "type": [
-            "array",
-            "null",
-          ],
-        },
-        "settlement": {
+      "oneOf": [
+        {
+          "description": "mindvault_buy result: the purchase diff plus a settlement-confirmation block describing how far the payment transaction got before returning.",
           "properties": {
             "attempts": {
               "type": "integer",
@@ -503,17 +696,60 @@ exports[`tool schema snapshots > mindvault_buy > output schema 1`] = `
             "skipped": {
               "type": "boolean",
             },
-            "status": {
+            "failureGuidance": {
               "type": [
-                "string",
+                "array",
                 "null",
               ],
             },
-            "success": {
-              "type": "boolean",
-            },
-            "timedOut": {
-              "type": "boolean",
+            "settlement": {
+              "properties": {
+                "attempts": {
+                  "type": "integer",
+                },
+                "message": {
+                  "type": "string",
+                },
+                "polled": {
+                  "type": "boolean",
+                },
+                "settled": {
+                  "type": "boolean",
+                },
+                "skipped": {
+                  "type": "boolean",
+                },
+                "status": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "success": {
+                  "type": "boolean",
+                },
+                "timedOut": {
+                  "type": "boolean",
+                },
+                "txHash": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+              },
+              "required": [
+                "polled",
+                "txHash",
+                "status",
+                "settled",
+                "success",
+                "timedOut",
+                "attempts",
+                "skipped",
+                "message",
+              ],
+              "type": "object",
             },
             "txHash": {
               "type": [
@@ -544,66 +780,103 @@ exports[`tool schema snapshots > mindvault_buy > output schema 1`] = `
           ],
           "type": "object",
         },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
           ],
-        },
-      },
-      "required": [
-        "before",
-        "after",
-        "changedFields",
-        "txHash",
-        "settlement",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
           "type": "object",
         },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "message",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -612,150 +885,287 @@ exports[`tool schema snapshots > mindvault_buy > output schema 1`] = `
 }
 `;
 
-exports[`tool schema snapshots > mindvault_batch_catalog_lookup > annotations 1`] = `
+exports[`tool schema snapshots > mindvault_buy_lease > annotations 1`] = `
 {
   "destructiveHint": false,
-  "idempotentHint": true,
-  "readOnlyHint": true,
-  "title": "Batch Catalog Lookup",
+  "idempotentHint": false,
+  "readOnlyHint": false,
+  "title": "Buy Access Lease",
 }
 `;
 
-exports[`tool schema snapshots > mindvault_batch_catalog_lookup > input schema 1`] = `
+exports[`tool schema snapshots > mindvault_buy_lease > input schema 1`] = `
 {
   "properties": {
-    "refetch": {
-      "description": "When true, skip the offline cache fallback and fail if the catalog API is unreachable. Default false (serve a labelled cached snapshot when offline).",
+    "confirmMainnet": {
+      "description": "Required on mainnet (or set MINDVAULT_ALLOW_MAINNET=1). Explicitly confirm this payment on the public Stellar network.",
       "type": "boolean",
     },
-    "resourceIds": {
-      "description": "1–25 resource ids, from mindvault_browse or mindvault_search. A comma-separated string is also accepted. Duplicates are looked up once each.",
+    "confirmPaid": {
+      "description": "Required when the server runs with MINDVAULT_CONFIRM_PAID_OPERATIONS=usdc or =all. Explicitly confirm that this call may spend from the agent wallet. Ignored when the policy is off (the default) and on dry runs.",
+      "type": "boolean",
+    },
+    "dryRun": {
+      "description": "Optional dry-run flag. When true, quotes the lease price and lists the steps without paying or writing on-chain.",
+      "type": "boolean",
+    },
+    "maxAutoPayUsdc": {
+      "description": "Explicit per-call maximum automatic payment in USDC. Required when the lease costs more than MINDVAULT_MAX_AUTO_PAY_USDC; must be at least the quoted price.",
       "examples": [
-        [
-          "cm7x8y9z",
-          "res-001",
-        ],
+        "25.00",
       ],
-      "items": {
-        "type": "string",
-      },
-      "maxItems": 25,
-      "minItems": 1,
-      "type": "array",
+      "type": "string",
+    },
+    "resourceId": {
+      "description": "The resource ID to lease, from mindvault_browse or mindvault_search. Letters, digits, dot, dash, or underscore.",
+      "examples": [
+        "cm7x8y9z",
+        "swcn98besxpp6t1u8e77fqz3",
+      ],
+      "type": "string",
+    },
+    "tier": {
+      "description": "Lease duration tier: hour (720 ledgers, 1x price), day (17280 ledgers, 5x), or week (120960 ledgers, 20x).",
+      "enum": [
+        "hour",
+        "day",
+        "week",
+      ],
+      "examples": [
+        "day",
+      ],
+      "type": "string",
     },
   },
   "required": [
-    "resourceIds",
+    "resourceId",
+    "tier",
   ],
   "type": "object",
 }
 `;
 
-exports[`tool schema snapshots > mindvault_batch_catalog_lookup > output schema 1`] = `
+exports[`tool schema snapshots > mindvault_buy_lease > output schema 1`] = `
 {
-  "properties": {
-    "foundCount": {
-      "type": "integer",
-    },
-    "items": {
-      "items": {
-        "properties": {
-          "accessUrl": {
-            "type": [
-              "string",
-              "null",
-            ],
+  "anyOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "creator": {
+              "type": "string",
+            },
+            "lease": {
+              "properties": {
+                "amountStroops": {
+                  "type": "string",
+                },
+                "amountUsdc": {
+                  "type": "string",
+                },
+                "expiryLedger": {
+                  "type": "integer",
+                },
+                "holder": {
+                  "type": "string",
+                },
+                "recordedAt": {
+                  "type": "integer",
+                },
+                "resourceId": {
+                  "type": "string",
+                },
+                "startLedger": {
+                  "type": "integer",
+                },
+                "state": {
+                  "type": "string",
+                },
+                "tier": {
+                  "enum": [
+                    "hour",
+                    "day",
+                    "week",
+                  ],
+                  "type": "string",
+                },
+                "txHash": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "resourceId",
+                "holder",
+                "tier",
+                "state",
+                "startLedger",
+                "expiryLedger",
+                "amountUsdc",
+              ],
+              "type": "object",
+            },
+            "next": {
+              "type": "string",
+            },
+            "paymentExplorerUrl": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "paymentTxHash": {
+              "type": "string",
+            },
+            "priceStroops": {
+              "type": "string",
+            },
+            "priceUsdc": {
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "const": "success",
+              "type": "string",
+            },
+            "tier": {
+              "type": "string",
+            },
           },
-          "found": {
-            "type": "boolean",
-          },
-          "id": {
-            "type": "string",
-          },
-          "price": {
-            "type": [
-              "string",
-              "number",
-              "null",
-            ],
-          },
-          "resourceType": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "title": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "verificationStatus": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
+          "required": [
+            "status",
+            "resourceId",
+            "tier",
+            "priceUsdc",
+            "paymentTxHash",
+            "lease",
+          ],
+          "type": "object",
         },
-        "required": [
-          "id",
-          "found",
-          "title",
-          "price",
-          "verificationStatus",
-          "resourceType",
-          "accessUrl",
-        ],
-        "type": "object",
-      },
-      "type": "array",
-    },
-    "missing": {
-      "items": {
-        "type": "string",
-      },
-      "type": "array",
-    },
-    "notice": {
-      "type": [
-        "string",
-        "null",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
+      "type": "object",
     },
-    "requested": {
-      "type": "integer",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "truncated": {
-      "type": "boolean",
-    },
-  },
-  "required": [
-    "items",
-    "requested",
-    "foundCount",
-    "missing",
-    "notice",
-    "truncated",
   ],
   "type": "object",
 }
 `;
 
-exports[`tool schema snapshots > mindvault_preview_metadata_hash > annotations 1`] = `
+exports[`tool schema snapshots > mindvault_cancel_transfer > annotations 1`] = `
 {
   "destructiveHint": false,
-  "idempotentHint": true,
-  "readOnlyHint": true,
-  "title": "Preview Metadata Hash",
+  "idempotentHint": false,
+  "readOnlyHint": false,
+  "title": "Cancel Transfer",
 }
 `;
 
-exports[`tool schema snapshots > mindvault_preview_metadata_hash > input schema 1`] = `
+exports[`tool schema snapshots > mindvault_cancel_transfer > input schema 1`] = `
 {
   "properties": {
+    "confirmMainnet": {
+      "description": "Required on mainnet (or set MINDVAULT_ALLOW_MAINNET=1). Explicitly confirm this mutation on the public Stellar network.",
+      "type": "boolean",
+    },
     "resourceId": {
-      "description": "The on-chain resource id to read (from mindvault_browse, mindvault_registry_list, or mindvault_publish). Letters, digits, dot, dash, or underscore.",
+      "description": "The resource ID whose pending transfer to cancel. Example: 'cm7x8y9z'",
       "examples": [
         "cm7x8y9z",
         "res-001",
@@ -770,71 +1180,187 @@ exports[`tool schema snapshots > mindvault_preview_metadata_hash > input schema 
 }
 `;
 
-exports[`tool schema snapshots > mindvault_preview_metadata_hash > output schema 1`] = `
+exports[`tool schema snapshots > mindvault_cancel_transfer > output schema 1`] = `
 {
-  "properties": {
-    "pointer": {
-      "properties": {
-        "present": {
-          "type": "boolean",
-        },
-        "source": {
-          "type": [
-            "string",
-            "null",
+  "anyOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
           ],
+          "type": "object",
         },
-      },
-      "required": [
-        "source",
-        "present",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
-    "report": {
+    {
       "properties": {
-        "algorithm": {
-          "type": [
-            "string",
-            "null",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
           ],
-        },
-        "canonical": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "present": {
-          "type": "boolean",
-        },
-        "reason": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "valid": {
-          "type": "boolean",
+          "type": "object",
         },
       },
       "required": [
-        "present",
-        "valid",
-        "canonical",
-        "algorithm",
-        "reason",
+        "troubleshooting",
       ],
       "type": "object",
     },
-    "resourceId": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "resourceId",
-    "pointer",
-    "report",
   ],
   "type": "object",
 }
@@ -893,48 +1419,103 @@ exports[`tool schema snapshots > mindvault_check_consistency > input schema 1`] 
 
 exports[`tool schema snapshots > mindvault_check_consistency > output schema 1`] = `
 {
-  "properties": {
-    "apiFound": {
-      "type": "boolean",
-    },
-    "matches": {
-      "type": "object",
-    },
-    "mismatches": {
-      "type": "object",
-    },
-    "missingInApi": {
-      "type": "array",
-    },
-    "missingInOnchain": {
-      "type": "array",
-    },
-    "onchainError": {
-      "type": [
-        "string",
-        "null",
+  "anyOf": [
+    {
+      "properties": {
+        "apiFound": {
+          "type": "boolean",
+        },
+        "matches": {
+          "type": "object",
+        },
+        "mismatches": {
+          "type": "object",
+        },
+        "missingInApi": {
+          "type": "array",
+        },
+        "missingInOnchain": {
+          "type": "array",
+        },
+        "onchainError": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "onchainFound": {
+          "type": "boolean",
+        },
+        "resourceId": {
+          "type": "string",
+        },
+        "summary": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "resourceId",
+        "apiFound",
+        "onchainFound",
+        "onchainError",
+        "matches",
+        "mismatches",
+        "missingInApi",
+        "missingInOnchain",
+        "summary",
       ],
+      "type": "object",
     },
-    "onchainFound": {
-      "type": "boolean",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "resourceId": {
-      "type": "string",
-    },
-    "summary": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "resourceId",
-    "apiFound",
-    "onchainFound",
-    "onchainError",
-    "matches",
-    "mismatches",
-    "missingInApi",
-    "missingInOnchain",
-    "summary",
   ],
   "type": "object",
 }
@@ -958,6 +1539,43 @@ exports[`tool schema snapshots > mindvault_check_state_permissions > input schem
 `;
 
 exports[`tool schema snapshots > mindvault_check_state_permissions > output schema 1`] = `null`;
+
+exports[`tool schema snapshots > mindvault_client_config > annotations 1`] = `
+{
+  "destructiveHint": false,
+  "idempotentHint": true,
+  "readOnlyHint": true,
+  "title": "Generate Client Config",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_client_config > input schema 1`] = `
+{
+  "properties": {
+    "client": {
+      "description": "Which client's config to emit. Omit to receive a config block for every supported client.",
+      "enum": [
+        "claude-code",
+        "claude-desktop",
+        "codex",
+        "cursor",
+        "vscode",
+        "windsurf",
+      ],
+      "examples": [
+        "claude-code",
+        "cursor",
+        "vscode",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [],
+  "type": "object",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_client_config > output schema 1`] = `null`;
 
 exports[`tool schema snapshots > mindvault_debug_bundle > annotations 1`] = `
 {
@@ -997,365 +1615,420 @@ exports[`tool schema snapshots > mindvault_debug_bundle > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_debug_bundle > output schema 1`] = `
 {
-  "properties": {
-    "auditLog": {
+  "anyOf": [
+    {
       "properties": {
-        "enabled": {
-          "type": "boolean",
-        },
-        "entries": {
-          "items": {
-            "type": "object",
-          },
-          "type": "array",
-        },
-        "exists": {
-          "type": "boolean",
-        },
-        "filePath": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "requested": {
-          "type": "integer",
-        },
-      },
-      "required": [
-        "enabled",
-        "filePath",
-        "exists",
-        "requested",
-        "entries",
-      ],
-      "type": "object",
-    },
-    "catalogCache": {
-      "properties": {
-        "maxAgeMs": {
-          "type": "integer",
-        },
-        "snapshot": {
+        "auditLog": {
           "properties": {
-            "label": {
-              "type": [
-                "string",
-                "null",
-              ],
-            },
-            "present": {
+            "enabled": {
               "type": "boolean",
             },
-            "resourceCount": {
-              "type": "integer",
+            "entries": {
+              "items": {
+                "type": "object",
+              },
+              "type": "array",
             },
-            "savedAt": {
-              "type": [
-                "string",
-                "null",
-              ],
-            },
-          },
-          "required": [
-            "present",
-            "savedAt",
-            "resourceCount",
-            "label",
-          ],
-          "type": "object",
-        },
-        "ttlMs": {
-          "type": "integer",
-        },
-      },
-      "required": [
-        "ttlMs",
-        "maxAgeMs",
-        "snapshot",
-      ],
-      "type": "object",
-    },
-    "config": {
-      "description": "The fully resolved configuration (env var, network preset, or default).",
-      "properties": {
-        "baseUrl": {
-          "type": "string",
-        },
-        "horizonUrl": {
-          "type": "string",
-        },
-        "registryContractId": {
-          "type": "string",
-        },
-        "registryNetworkPassphrase": {
-          "type": "string",
-        },
-        "sorobanRpcUrl": {
-          "type": "string",
-        },
-        "sponsoredAccountUrl": {
-          "type": "string",
-        },
-        "stellarNetwork": {
-          "type": "string",
-        },
-        "x402Network": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "stellarNetwork",
-        "x402Network",
-        "baseUrl",
-        "registryContractId",
-      ],
-      "type": "object",
-    },
-    "diagnostics": {
-      "items": {
-        "properties": {
-          "expected": {
-            "type": "string",
-          },
-          "message": {
-            "type": "string",
-          },
-          "severity": {
-            "enum": [
-              "error",
-              "warning",
-            ],
-            "type": "string",
-          },
-          "variable": {
-            "type": "string",
-          },
-        },
-        "required": [
-          "variable",
-          "severity",
-          "message",
-        ],
-        "type": "object",
-      },
-      "type": "array",
-    },
-    "environment": {
-      "additionalProperties": {
-        "type": "string",
-      },
-      "description": "MindVault-related environment variables; credential-like names carry "[REDACTED]". Null when includeEnvironment is false.",
-      "type": [
-        "object",
-        "null",
-      ],
-    },
-    "generatedAt": {
-      "description": "ISO-8601 instant the bundle was produced.",
-      "type": "string",
-    },
-    "install": {
-      "properties": {
-        "checks": {
-          "items": {
-            "properties": {
-              "detail": {
-                "type": "string",
-              },
-              "name": {
-                "type": "string",
-              },
-              "ok": {
-                "type": "boolean",
-              },
-            },
-            "required": [
-              "name",
-              "ok",
-              "detail",
-            ],
-            "type": "object",
-          },
-          "type": "array",
-        },
-        "ok": {
-          "type": "boolean",
-        },
-      },
-      "required": [
-        "ok",
-        "checks",
-      ],
-      "type": "object",
-    },
-    "metrics": {
-      "description": "The mindvault_metrics snapshot; enabled=false when metrics are off.",
-      "type": "object",
-    },
-    "profiles": {
-      "properties": {
-        "active": {
-          "type": "string",
-        },
-        "entries": {
-          "items": {
-            "properties": {
-              "active": {
-                "type": "boolean",
-              },
-              "hasApiKey": {
-                "type": "boolean",
-              },
-              "hasWallet": {
-                "type": "boolean",
-              },
-              "name": {
-                "type": "string",
-              },
-              "publicKey": {
-                "type": [
-                  "string",
-                  "null",
-                ],
-              },
-            },
-            "required": [
-              "name",
-              "active",
-              "hasWallet",
-              "publicKey",
-              "hasApiKey",
-            ],
-            "type": "object",
-          },
-          "type": "array",
-        },
-      },
-      "required": [
-        "active",
-        "entries",
-      ],
-      "type": "object",
-    },
-    "runtime": {
-      "properties": {
-        "arch": {
-          "type": "string",
-        },
-        "mockMode": {
-          "type": "boolean",
-        },
-        "nodeVersion": {
-          "type": "string",
-        },
-        "platform": {
-          "type": "string",
-        },
-        "readOnlyMode": {
-          "type": "boolean",
-        },
-        "serverVersion": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "serverVersion",
-        "nodeVersion",
-        "platform",
-        "arch",
-        "mockMode",
-        "readOnlyMode",
-      ],
-      "type": "object",
-    },
-    "sanitized": {
-      "description": "What was withheld and the rules that decided it.",
-      "properties": {
-        "maskedEnvironment": {
-          "items": {
-            "type": "string",
-          },
-          "type": "array",
-        },
-        "rules": {
-          "items": {
-            "type": "string",
-          },
-          "type": "array",
-        },
-      },
-      "required": [
-        "maskedEnvironment",
-        "rules",
-      ],
-      "type": "object",
-    },
-    "schema": {
-      "const": "mindvault.debug-bundle/v1",
-      "type": "string",
-    },
-    "state": {
-      "properties": {
-        "dir": {
-          "type": "string",
-        },
-        "file": {
-          "type": "string",
-        },
-        "permissions": {
-          "properties": {
             "exists": {
               "type": "boolean",
             },
-            "expectedMode": {
-              "type": "string",
-            },
-            "isSafe": {
-              "type": "boolean",
-            },
-            "message": {
-              "type": "string",
-            },
-            "mode": {
+            "filePath": {
               "type": [
                 "string",
                 "null",
               ],
             },
+            "requested": {
+              "type": "integer",
+            },
           },
           "required": [
+            "enabled",
+            "filePath",
             "exists",
-            "mode",
-            "expectedMode",
-            "isSafe",
-            "message",
+            "requested",
+            "entries",
+          ],
+          "type": "object",
+        },
+        "catalogCache": {
+          "properties": {
+            "maxAgeMs": {
+              "type": "integer",
+            },
+            "snapshot": {
+              "properties": {
+                "label": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "present": {
+                  "type": "boolean",
+                },
+                "resourceCount": {
+                  "type": "integer",
+                },
+                "savedAt": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+              },
+              "required": [
+                "present",
+                "savedAt",
+                "resourceCount",
+                "label",
+              ],
+              "type": "object",
+            },
+            "ttlMs": {
+              "type": "integer",
+            },
+          },
+          "required": [
+            "ttlMs",
+            "maxAgeMs",
+            "snapshot",
+          ],
+          "type": "object",
+        },
+        "config": {
+          "description": "The fully resolved configuration (env var, network preset, or default).",
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+            },
+            "horizonUrl": {
+              "type": "string",
+            },
+            "registryContractId": {
+              "type": "string",
+            },
+            "registryNetworkPassphrase": {
+              "type": "string",
+            },
+            "sorobanRpcUrl": {
+              "type": "string",
+            },
+            "sponsoredAccountUrl": {
+              "type": "string",
+            },
+            "stellarNetwork": {
+              "type": "string",
+            },
+            "x402Network": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "stellarNetwork",
+            "x402Network",
+            "baseUrl",
+            "registryContractId",
+          ],
+          "type": "object",
+        },
+        "diagnostics": {
+          "items": {
+            "properties": {
+              "expected": {
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                ],
+                "type": "string",
+              },
+              "variable": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "variable",
+              "severity",
+              "message",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string",
+          },
+          "description": "MindVault-related environment variables; credential-like names carry "[REDACTED]". Null when includeEnvironment is false.",
+          "type": [
+            "object",
+            "null",
+          ],
+        },
+        "generatedAt": {
+          "description": "ISO-8601 instant the bundle was produced.",
+          "type": "string",
+        },
+        "install": {
+          "properties": {
+            "checks": {
+              "items": {
+                "properties": {
+                  "detail": {
+                    "type": "string",
+                  },
+                  "name": {
+                    "type": "string",
+                  },
+                  "ok": {
+                    "type": "boolean",
+                  },
+                },
+                "required": [
+                  "name",
+                  "ok",
+                  "detail",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+            "ok": {
+              "type": "boolean",
+            },
+          },
+          "required": [
+            "ok",
+            "checks",
+          ],
+          "type": "object",
+        },
+        "metrics": {
+          "description": "The mindvault_metrics snapshot; enabled=false when metrics are off.",
+          "type": "object",
+        },
+        "profiles": {
+          "properties": {
+            "active": {
+              "type": "string",
+            },
+            "entries": {
+              "items": {
+                "properties": {
+                  "active": {
+                    "type": "boolean",
+                  },
+                  "hasApiKey": {
+                    "type": "boolean",
+                  },
+                  "hasWallet": {
+                    "type": "boolean",
+                  },
+                  "name": {
+                    "type": "string",
+                  },
+                  "publicKey": {
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                },
+                "required": [
+                  "name",
+                  "active",
+                  "hasWallet",
+                  "publicKey",
+                  "hasApiKey",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "active",
+            "entries",
+          ],
+          "type": "object",
+        },
+        "runtime": {
+          "properties": {
+            "arch": {
+              "type": "string",
+            },
+            "mockMode": {
+              "type": "boolean",
+            },
+            "nodeVersion": {
+              "type": "string",
+            },
+            "platform": {
+              "type": "string",
+            },
+            "readOnlyMode": {
+              "type": "boolean",
+            },
+            "serverVersion": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "serverVersion",
+            "nodeVersion",
+            "platform",
+            "arch",
+            "mockMode",
+            "readOnlyMode",
+          ],
+          "type": "object",
+        },
+        "sanitized": {
+          "description": "What was withheld and the rules that decided it.",
+          "properties": {
+            "maskedEnvironment": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "rules": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "maskedEnvironment",
+            "rules",
+          ],
+          "type": "object",
+        },
+        "schema": {
+          "const": "mindvault.debug-bundle/v1",
+          "type": "string",
+        },
+        "state": {
+          "properties": {
+            "dir": {
+              "type": "string",
+            },
+            "file": {
+              "type": "string",
+            },
+            "permissions": {
+              "properties": {
+                "exists": {
+                  "type": "boolean",
+                },
+                "expectedMode": {
+                  "type": "string",
+                },
+                "isSafe": {
+                  "type": "boolean",
+                },
+                "message": {
+                  "type": "string",
+                },
+                "mode": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+              },
+              "required": [
+                "exists",
+                "mode",
+                "expectedMode",
+                "isSafe",
+                "message",
+              ],
+              "type": "object",
+            },
+          },
+          "required": [
+            "dir",
+            "file",
+            "permissions",
           ],
           "type": "object",
         },
       },
       "required": [
-        "dir",
-        "file",
-        "permissions",
+        "schema",
+        "generatedAt",
+        "sanitized",
+        "runtime",
+        "config",
+        "environment",
+        "diagnostics",
+        "install",
+        "profiles",
+        "state",
+        "metrics",
+        "catalogCache",
+        "auditLog",
       ],
       "type": "object",
     },
-  },
-  "required": [
-    "schema",
-    "generatedAt",
-    "sanitized",
-    "runtime",
-    "config",
-    "environment",
-    "diagnostics",
-    "install",
-    "profiles",
-    "state",
-    "metrics",
-    "catalogCache",
-    "auditLog",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
+    },
   ],
   "type": "object",
 }
@@ -1447,166 +2120,250 @@ exports[`tool schema snapshots > mindvault_export_receipts > input schema 1`] = 
 
 exports[`tool schema snapshots > mindvault_export_receipts > output schema 1`] = `
 {
-  "properties": {
-    "count": {
-      "description": "Number of exported receipts.",
-      "type": "integer",
-    },
-    "csv": {
-      "description": "RFC 4180 document of the same rows. Present only when format is "csv".",
-      "type": "string",
-    },
-    "currency": {
-      "const": "USDC",
-      "type": "string",
-    },
-    "filters": {
-      "description": "The filters this export was produced with; null where unset.",
+  "anyOf": [
+    {
       "properties": {
-        "groupBy": {
+        "count": {
+          "description": "Number of exported receipts.",
+          "type": "integer",
+        },
+        "csv": {
+          "description": "RFC 4180 document of the same rows. Present only when format is "csv".",
+          "type": "string",
+        },
+        "currency": {
+          "const": "USDC",
+          "type": "string",
+        },
+        "filters": {
+          "description": "The filters this export was produced with; null where unset.",
+          "properties": {
+            "groupBy": {
+              "enum": [
+                "month",
+                null,
+              ],
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "limit": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "network": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "resourceId": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "since": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "until": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          "required": [
+            "resourceId",
+            "network",
+            "since",
+            "until",
+            "limit",
+            "groupBy",
+          ],
+          "type": "object",
+        },
+        "format": {
           "enum": [
-            "month",
-            null,
+            "json",
+            "csv",
+            "ndjson",
           ],
-          "type": [
-            "string",
-            "null",
-          ],
+          "type": "string",
         },
-        "limit": {
-          "type": [
-            "integer",
-            "null",
-          ],
+        "generatedAt": {
+          "description": "ISO-8601 instant the export was produced.",
+          "type": "string",
         },
-        "network": {
-          "type": [
-            "string",
-            "null",
-          ],
+        "monthlySummaries": {
+          "description": "UTC monthly totals, present only when groupBy is "month".",
+          "items": {
+            "properties": {
+              "count": {
+                "type": "integer",
+              },
+              "currency": {
+                "const": "USDC",
+                "type": "string",
+              },
+              "month": {
+                "pattern": "^[0-9]{4}-[0-9]{2}$",
+                "type": "string",
+              },
+              "totalAmount": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "month",
+              "count",
+              "totalAmount",
+              "currency",
+            ],
+            "type": "object",
+          },
+          "type": "array",
         },
-        "resourceId": {
-          "type": [
-            "string",
-            "null",
-          ],
+        "ndjson": {
+          "description": "Newline-Delimited JSON document of the same rows. Present only when format is "ndjson".",
+          "type": "string",
         },
-        "since": {
-          "type": [
-            "string",
-            "null",
-          ],
+        "receipts": {
+          "items": {
+            "properties": {
+              "amount": {
+                "type": "string",
+              },
+              "currency": {
+                "const": "USDC",
+                "type": "string",
+              },
+              "explorerUrl": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "network": {
+                "type": "string",
+              },
+              "purchasedAt": {
+                "type": "string",
+              },
+              "receiptRef": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "resourceId": {
+                "type": "string",
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "txHash": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+            },
+            "required": [
+              "resourceId",
+              "title",
+              "amount",
+              "currency",
+              "network",
+              "purchasedAt",
+              "txHash",
+              "receiptRef",
+              "explorerUrl",
+            ],
+            "type": "object",
+          },
+          "type": "array",
         },
-        "until": {
-          "type": [
-            "string",
-            "null",
-          ],
+        "schema": {
+          "const": "mindvault.receipt-export/v1",
+          "type": "string",
+        },
+        "totalAmount": {
+          "description": "Sum of the exported amounts as a decimal string.",
+          "type": "string",
         },
       },
       "required": [
-        "resourceId",
-        "network",
-        "since",
-        "until",
-        "limit",
-        "groupBy",
+        "schema",
+        "generatedAt",
+        "format",
+        "filters",
+        "count",
+        "totalAmount",
+        "currency",
+        "receipts",
       ],
       "type": "object",
     },
-    "format": {
-      "enum": [
-        "json",
-        "csv",
-        "ndjson",
-      ],
-      "type": "string",
-    },
-    "generatedAt": {
-      "description": "ISO-8601 instant the export was produced.",
-      "type": "string",
-    },
-    "ndjson": {
-      "description": "Newline-Delimited JSON document of the same rows. Present only when format is "ndjson".",
-      "type": "string",
-    },
-    "receipts": {
-      "items": {
-        "properties": {
-          "amount": {
-            "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
           },
-          "currency": {
-            "const": "USDC",
-            "type": "string",
-          },
-          "explorerUrl": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "network": {
-            "type": "string",
-          },
-          "purchasedAt": {
-            "type": "string",
-          },
-          "receiptRef": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "resourceId": {
-            "type": "string",
-          },
-          "title": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "txHash": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
-        "required": [
-          "resourceId",
-          "title",
-          "amount",
-          "currency",
-          "network",
-          "purchasedAt",
-          "txHash",
-          "receiptRef",
-          "explorerUrl",
-        ],
-        "type": "object",
       },
-      "type": "array",
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "schema": {
-      "const": "mindvault.receipt-export/v1",
-      "type": "string",
-    },
-    "totalAmount": {
-      "description": "Sum of the exported amounts as a decimal string.",
-      "type": "string",
-    },
-  },
-  "required": [
-    "schema",
-    "generatedAt",
-    "format",
-    "filters",
-    "count",
-    "totalAmount",
-    "currency",
-    "receipts",
   ],
   "type": "object",
 }
@@ -1631,45 +2388,100 @@ exports[`tool schema snapshots > mindvault_fee_config > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_fee_config > output schema 1`] = `
 {
-  "properties": {
-    "configured": {
-      "type": "boolean",
-    },
-    "contract": {},
-    "creatorPayoutBps": {
-      "type": "integer",
-    },
-    "creatorPayoutPercent": {
-      "type": "string",
-    },
-    "feeRecipient": {
-      "type": [
-        "string",
-        "null",
+  "anyOf": [
+    {
+      "properties": {
+        "configured": {
+          "type": "boolean",
+        },
+        "contract": {},
+        "creatorPayoutBps": {
+          "type": "integer",
+        },
+        "creatorPayoutPercent": {
+          "type": "string",
+        },
+        "feeRecipient": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "message": {
+          "type": "string",
+        },
+        "network": {},
+        "platformFeeBps": {
+          "type": "integer",
+        },
+        "royaltyBps": {
+          "type": "integer",
+        },
+        "rpc": {},
+        "source": {
+          "type": "string",
+        },
+        "totalFeeBps": {
+          "type": "integer",
+        },
+      },
+      "required": [
+        "source",
+        "configured",
+        "contract",
       ],
+      "type": "object",
     },
-    "message": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "network": {},
-    "platformFeeBps": {
-      "type": "integer",
-    },
-    "royaltyBps": {
-      "type": "integer",
-    },
-    "rpc": {},
-    "source": {
-      "type": "string",
-    },
-    "totalFeeBps": {
-      "type": "integer",
-    },
-  },
-  "required": [
-    "source",
-    "configured",
-    "contract",
   ],
   "type": "object",
 }
@@ -1721,85 +2533,182 @@ exports[`tool schema snapshots > mindvault_freeze > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_freeze > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -1855,21 +2764,252 @@ exports[`tool schema snapshots > mindvault_import_wallet > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_import_wallet > output schema 1`] = `
 {
+  "anyOf": [
+    {
+      "properties": {
+        "address": {
+          "type": "string",
+        },
+        "persisted": {
+          "type": "boolean",
+        },
+        "profile": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "profile",
+        "address",
+        "persisted",
+      ],
+      "type": "object",
+    },
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
+    },
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_lease_status > annotations 1`] = `
+{
+  "destructiveHint": false,
+  "idempotentHint": true,
+  "readOnlyHint": true,
+  "title": "Lease Status",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_lease_status > input schema 1`] = `
+{
   "properties": {
-    "address": {
+    "holder": {
+      "description": "Optional holder address (G… key). Defaults to the active agent wallet.",
       "type": "string",
     },
-    "persisted": {
-      "type": "boolean",
-    },
-    "profile": {
+    "resourceId": {
+      "description": "The resource ID to inspect. Example: 'cm7x8y9z'",
+      "examples": [
+        "cm7x8y9z",
+        "res-001",
+      ],
       "type": "string",
     },
   },
   "required": [
-    "profile",
-    "address",
-    "persisted",
+    "resourceId",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_lease_status > output schema 1`] = `
+{
+  "anyOf": [
+    {
+      "properties": {
+        "active": {
+          "type": "boolean",
+        },
+        "contract": {
+          "type": "string",
+        },
+        "found": {
+          "type": "boolean",
+        },
+        "holder": {
+          "type": "string",
+        },
+        "lease": {
+          "properties": {
+            "amountStroops": {
+              "type": "string",
+            },
+            "amountUsdc": {
+              "type": "string",
+            },
+            "expiryLedger": {
+              "type": "integer",
+            },
+            "holder": {
+              "type": "string",
+            },
+            "recordedAt": {
+              "type": "integer",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "startLedger": {
+              "type": "integer",
+            },
+            "state": {
+              "type": "string",
+            },
+            "tier": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+              ],
+              "type": "string",
+            },
+            "txHash": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "resourceId",
+            "holder",
+            "tier",
+            "state",
+            "startLedger",
+            "expiryLedger",
+            "amountUsdc",
+          ],
+          "type": "object",
+        },
+        "message": {
+          "type": "string",
+        },
+        "network": {
+          "type": "string",
+        },
+        "resourceId": {
+          "type": "string",
+        },
+        "source": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "source",
+        "resourceId",
+        "holder",
+        "found",
+        "active",
+        "message",
+      ],
+      "type": "object",
+    },
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
+    },
   ],
   "type": "object",
 }
@@ -1894,43 +3034,98 @@ exports[`tool schema snapshots > mindvault_list_profiles > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_list_profiles > output schema 1`] = `
 {
-  "properties": {
-    "active": {
-      "type": "string",
-    },
-    "profiles": {
-      "items": {
-        "properties": {
-          "active": {
-            "type": "boolean",
-          },
-          "address": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "name": {
-            "type": "string",
-          },
-          "publisherRegistered": {
-            "type": "boolean",
-          },
+  "anyOf": [
+    {
+      "properties": {
+        "active": {
+          "type": "string",
         },
-        "required": [
-          "name",
-          "address",
-          "publisherRegistered",
-          "active",
-        ],
-        "type": "object",
+        "profiles": {
+          "items": {
+            "properties": {
+              "active": {
+                "type": "boolean",
+              },
+              "address": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "name": {
+                "type": "string",
+              },
+              "publisherRegistered": {
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "name",
+              "address",
+              "publisherRegistered",
+              "active",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
       },
-      "type": "array",
+      "required": [
+        "active",
+        "profiles",
+      ],
+      "type": "object",
     },
-  },
-  "required": [
-    "active",
-    "profiles",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
+    },
   ],
   "type": "object",
 }
@@ -1996,46 +3191,101 @@ exports[`tool schema snapshots > mindvault_metrics > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_metrics > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-        },
-        "message": {
-          "type": "string",
-        },
-        "payments": {
-          "type": "object",
-        },
-        "since": {
-          "type": [
-            "string",
-            "null",
+      "oneOf": [
+        {
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "payments": {
+              "type": "object",
+            },
+            "since": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "toolDurationBudgetMs": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "tools": {
+              "type": "object",
+            },
+            "totals": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "enabled",
           ],
+          "type": "object",
         },
-        "toolDurationBudgetMs": {
-          "type": [
-            "integer",
-            "null",
+        {
+          "description": "The same snapshot rendered as an OTLP/JSON ExportMetricsServiceRequest body when format=otlp.",
+          "required": [
+            "resourceMetrics",
           ],
-        },
-        "tools": {
           "type": "object",
         },
-        "totals": {
-          "type": "object",
-        },
-      },
-      "required": [
-        "enabled",
       ],
       "type": "object",
     },
     {
-      "description": "The same snapshot rendered as an OTLP/JSON ExportMetricsServiceRequest body when format=otlp.",
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
       "required": [
-        "resourceMetrics",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -2063,40 +3313,95 @@ exports[`tool schema snapshots > mindvault_network_profile > input schema 1`] = 
 
 exports[`tool schema snapshots > mindvault_network_profile > output schema 1`] = `
 {
-  "properties": {
-    "horizonUrl": {
-      "type": "string",
-    },
-    "registryContractId": {
-      "type": "string",
-    },
-    "retries": {},
-    "sorobanRpcUrl": {
-      "type": "string",
-    },
-    "stellarNetwork": {
-      "type": "string",
-    },
-    "timeouts": {},
-    "usdcContractId": {},
-    "warnings": {
-      "items": {
-        "type": "string",
+  "anyOf": [
+    {
+      "properties": {
+        "horizonUrl": {
+          "type": "string",
+        },
+        "registryContractId": {
+          "type": "string",
+        },
+        "retries": {},
+        "sorobanRpcUrl": {
+          "type": "string",
+        },
+        "stellarNetwork": {
+          "type": "string",
+        },
+        "timeouts": {},
+        "usdcContractId": {},
+        "warnings": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "x402Network": {
+          "type": "string",
+        },
       },
-      "type": "array",
+      "required": [
+        "stellarNetwork",
+        "x402Network",
+        "sorobanRpcUrl",
+        "horizonUrl",
+        "registryContractId",
+        "usdcContractId",
+        "warnings",
+      ],
+      "type": "object",
     },
-    "x402Network": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-  },
-  "required": [
-    "stellarNetwork",
-    "x402Network",
-    "sorobanRpcUrl",
-    "horizonUrl",
-    "registryContractId",
-    "usdcContractId",
-    "warnings",
   ],
   "type": "object",
 }
@@ -2132,41 +3437,82 @@ exports[`tool schema snapshots > mindvault_pending_transfer > input schema 1`] =
 
 exports[`tool schema snapshots > mindvault_pending_transfer > output schema 1`] = `
 {
-  "properties": {
-    "contract": {
-      "type": "string",
-    },
-    "found": {
-      "type": "boolean",
-    },
-    "message": {
-      "type": "string",
-    },
-    "network": {
-      "type": "string",
-    },
-    "proposedNewOwner": {
-      "type": [
-        "string",
-        "null",
+  "anyOf": [
+    {
+      "properties": {
+        "found": {
+          "type": "boolean",
+        },
+        "message": {
+          "type": "string",
+        },
+        "pendingOwner": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "resourceId": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "resourceId",
+        "found",
+        "message",
       ],
+      "type": "object",
     },
-    "resourceId": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "rpc": {
-      "type": "string",
-    },
-    "source": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "source",
-    "resourceId",
-    "found",
-    "message",
-    "contract",
   ],
   "type": "object",
 }
@@ -2203,26 +3549,81 @@ exports[`tool schema snapshots > mindvault_preview > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_preview > output schema 1`] = `
 {
-  "properties": {
-    "accessUrl": {},
-    "description": {},
-    "id": {},
-    "offlineCache": {
-      "type": "string",
+  "anyOf": [
+    {
+      "properties": {
+        "accessUrl": {},
+        "description": {},
+        "id": {},
+        "offlineCache": {
+          "type": "string",
+        },
+        "price": {},
+        "title": {},
+        "type": {},
+        "verificationStatus": {},
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "price",
+        "type",
+        "verificationStatus",
+        "accessUrl",
+      ],
+      "type": "object",
     },
-    "price": {},
-    "title": {},
-    "type": {},
-    "verificationStatus": {},
-  },
-  "required": [
-    "id",
-    "title",
-    "description",
-    "price",
-    "type",
-    "verificationStatus",
-    "accessUrl",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
+    },
   ],
   "type": "object",
 }
@@ -2315,82 +3716,137 @@ exports[`tool schema snapshots > mindvault_publish > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_publish > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "after": {},
-        "before": {},
-        "changedFields": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "after": {},
+            "before": {},
+            "changedFields": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "failureGuidance": {
+              "type": [
+                "array",
+                "null",
+              ],
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "failureGuidance": {
-          "type": [
-            "array",
-            "null",
+          "required": [
+            "before",
+            "after",
+            "changedFields",
+            "txHash",
           ],
+          "type": "object",
         },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
           ],
+          "type": "object",
         },
-      },
-      "required": [
-        "before",
-        "after",
-        "changedFields",
-        "txHash",
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
           "type": "object",
         },
       },
       "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
-        },
-      },
-      "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -2473,110 +3929,98 @@ exports[`tool schema snapshots > mindvault_publish_batch > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_publish_batch > output schema 1`] = `
 {
-  "properties": {
-    "errored": {
-      "type": "number",
-    },
-    "items": {
-      "items": {
-        "properties": {
-          "error": {
-            "type": "string",
-          },
-          "flags": {
-            "items": {
-              "type": "string",
-            },
-            "type": "array",
-          },
-          "id": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "index": {
-            "type": "number",
-          },
-          "onchainStatus": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "title": {
-            "type": "string",
-          },
-          "verificationStatus": {
-            "enum": [
-              "approved",
-              "rejected",
-              "error",
-            ],
-            "type": "string",
-          },
-        },
-        "required": [
-          "index",
-          "title",
-          "id",
-          "verificationStatus",
-          "onchainStatus",
-        ],
-        "type": "object",
-      },
-      "type": "array",
-    },
-    "onchainStatus": {
-      "type": "string",
-    },
-    "rejected": {
-      "type": "number",
-    },
-    "requested": {
-      "type": "number",
-    },
-    "txHash": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "verified": {
-      "type": "number",
-    },
-  },
-  "required": [
-    "requested",
-    "verified",
-    "rejected",
-    "errored",
-    "onchainStatus",
-    "txHash",
-    "items",
-  ],
-  "type": "object",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_publish > output schema 1`] = `
-{
-  "oneOf": [
+  "anyOf": [
     {
       "properties": {
-        "after": {},
-        "before": {},
-        "changedFields": {
+        "errored": {
+          "type": "number",
+        },
+        "items": {
           "items": {
-            "type": "string",
+            "properties": {
+              "error": {
+                "type": "string",
+              },
+              "flags": {
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "index": {
+                "type": "number",
+              },
+              "onchainStatus": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "title": {
+                "type": "string",
+              },
+              "verificationStatus": {
+                "enum": [
+                  "approved",
+                  "rejected",
+                  "error",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "index",
+              "title",
+              "id",
+              "verificationStatus",
+              "onchainStatus",
+            ],
+            "type": "object",
           },
           "type": "array",
         },
-        "failureGuidance": {
-          "type": [
-            "array",
-            "null",
+        "onchainStatus": {
+          "type": "string",
+        },
+        "rejected": {
+          "type": "number",
+        },
+        "requested": {
+          "type": "number",
+        },
+        "statusLookup": {
+          "properties": {
+            "arguments": {
+              "properties": {
+                "txHash": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "txHash",
+              ],
+              "type": "object",
+            },
+            "retryable": {
+              "type": "boolean",
+            },
+            "tool": {
+              "const": "mindvault_tx_status",
+              "type": "string",
+            },
+          },
+          "required": [
+            "tool",
+            "arguments",
+            "retryable",
           ],
+          "type": "object",
         },
         "txHash": {
           "type": [
@@ -2584,59 +4028,68 @@ exports[`tool schema snapshots > mindvault_publish > output schema 1`] = `
             "null",
           ],
         },
+        "verified": {
+          "type": "number",
+        },
       },
       "required": [
-        "before",
-        "after",
-        "changedFields",
+        "requested",
+        "verified",
+        "rejected",
+        "errored",
+        "onchainStatus",
         "txHash",
+        "items",
       ],
       "type": "object",
     },
     {
       "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
           "type": "object",
         },
       },
       "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
-        },
-      },
-      "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -2698,211 +4151,141 @@ exports[`tool schema snapshots > mindvault_publish_status > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_publish_status > output schema 1`] = `
 {
-  "properties": {
-    "accessUrl": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "attempts": {
-      "type": "integer",
-    },
-    "contentHash": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "listed": {
-      "type": [
-        "boolean",
-        "null",
-      ],
-    },
-    "message": {
-      "type": "string",
-    },
-    "onchainStatus": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "onchainTxHash": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "polled": {
-      "type": "boolean",
-    },
-    "resourceId": {
-      "type": "string",
-    },
-    "settled": {
-      "type": "boolean",
-    },
-    "timedOut": {
-      "type": "boolean",
-    },
-    "title": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "verification": {
-      "type": [
-        "object",
-        "null",
-      ],
-    },
-    "verificationStatus": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "resourceId",
-    "title",
-    "verificationStatus",
-    "listed",
-    "onchainStatus",
-    "onchainTxHash",
-    "contentHash",
-    "accessUrl",
-    "verification",
-    "polled",
-    "attempts",
-    "settled",
-    "timedOut",
-    "message",
-  ],
-  "type": "object",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_publish_template > annotations 1`] = `
-{
-  "destructiveHint": false,
-  "idempotentHint": true,
-  "readOnlyHint": true,
-  "title": "Publish Template",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_publish_template > input schema 1`] = `
-{
-  "properties": {
-    "metadataPointer": {
-      "description": "Optional metadata pointer override. When supplied, replaces the type-default format. Must start with ipfs://, ar://, http(s)://, sha256:, sha-256:, or 0x.",
-      "examples": [
-        "ipfs://QmXyz...",
-        "sha256:abc123...",
-      ],
-      "type": "string",
-    },
-    "price": {
-      "description": "Optional USDC price override (decimal string). Overrides the suggested price for the chosen resource type.",
-      "examples": [
-        "1.00",
-        "5.00",
-        "10.00",
-      ],
-      "type": "string",
-    },
-    "resourceType": {
-      "description": "Known resource type to generate defaults for. Each type has its own canonical tags, metadata pointer format, suggested price, and description template.",
-      "enum": [
-        "dataset",
-        "code",
-        "prompt",
-        "model",
-      ],
-      "examples": [
-        "dataset",
-        "code",
-        "prompt",
-        "model",
-      ],
-      "type": "string",
-    },
-    "tags": {
-      "description": "Optional tag override (replaces, not merges, the type-default tags). 1–8 lowercase tags, each 1–32 characters.",
-      "examples": [
-        [
-          "dataset",
-          "finance",
-          "time-series",
-        ],
-      ],
-      "items": {
-        "type": "string",
+  "anyOf": [
+    {
+      "properties": {
+        "accessUrl": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "attempts": {
+          "type": "integer",
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "listed": {
+          "type": [
+            "boolean",
+            "null",
+          ],
+        },
+        "message": {
+          "type": "string",
+        },
+        "onchainStatus": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "onchainTxHash": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "polled": {
+          "type": "boolean",
+        },
+        "resourceId": {
+          "type": "string",
+        },
+        "settled": {
+          "type": "boolean",
+        },
+        "timedOut": {
+          "type": "boolean",
+        },
+        "title": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "verification": {
+          "type": [
+            "object",
+            "null",
+          ],
+        },
+        "verificationStatus": {
+          "type": "string",
+        },
       },
-      "type": "array",
-    },
-    "title": {
-      "description": "Optional title to include in the returned spec (1–256 characters).",
-      "examples": [
-        "My Training Dataset",
-        "GPT-4 System Prompt Library",
+      "required": [
+        "resourceId",
+        "title",
+        "verificationStatus",
+        "listed",
+        "onchainStatus",
+        "onchainTxHash",
+        "contentHash",
+        "accessUrl",
+        "verification",
+        "polled",
+        "attempts",
+        "settled",
+        "timedOut",
+        "message",
       ],
-      "type": "string",
+      "type": "object",
     },
-  },
-  "required": [
-    "resourceType",
-  ],
-  "type": "object",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_publish_template > output schema 1`] = `
-{
-  "properties": {
-    "description": {
-      "type": "string",
-    },
-    "metadataPointer": {
-      "type": "string",
-    },
-    "nextSteps": {
-      "items": {
-        "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
       },
-      "type": "array",
-    },
-    "price": {
-      "type": "string",
-    },
-    "resourceType": {
-      "enum": [
-        "dataset",
-        "code",
-        "prompt",
-        "model",
+      "required": [
+        "troubleshooting",
       ],
-      "type": "string",
+      "type": "object",
     },
-    "tags": {
-      "items": {
-        "type": "string",
-      },
-      "type": "array",
-    },
-    "title": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "resourceType",
-    "title",
-    "metadataPointer",
-    "tags",
-    "price",
-    "description",
-    "nextSteps",
   ],
   "type": "object",
 }
@@ -2952,20 +4335,125 @@ exports[`tool schema snapshots > mindvault_purchase_history > input schema 1`] =
 
 exports[`tool schema snapshots > mindvault_purchase_history > output schema 1`] = `
 {
-  "properties": {
-    "count": {
-      "type": "integer",
+  "anyOf": [
+    {
+      "properties": {
+        "count": {
+          "type": "integer",
+        },
+        "message": {
+          "type": "string",
+        },
+        "purchases": {
+          "items": {
+            "properties": {
+              "amount": {
+                "type": "string",
+              },
+              "explorerUrl": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "network": {
+                "type": "string",
+              },
+              "profile": {
+                "type": "string",
+              },
+              "receiptRef": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "resourceId": {
+                "type": "string",
+              },
+              "timestamp": {
+                "type": "string",
+              },
+              "title": {
+                "type": "string",
+              },
+              "txHash": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+            },
+            "required": [
+              "resourceId",
+              "amount",
+              "network",
+              "txHash",
+              "timestamp",
+              "receiptRef",
+              "explorerUrl",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "count",
+        "purchases",
+      ],
+      "type": "object",
     },
-    "message": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "purchases": {
-      "type": "array",
-    },
-  },
-  "required": [
-    "count",
-    "purchases",
   ],
   "type": "object",
 }
@@ -2990,21 +4478,76 @@ exports[`tool schema snapshots > mindvault_recover_catalog_cache > input schema 
 
 exports[`tool schema snapshots > mindvault_recover_catalog_cache > output schema 1`] = `
 {
-  "properties": {
-    "action": {
-      "type": "string",
+  "anyOf": [
+    {
+      "properties": {
+        "action": {
+          "type": "string",
+        },
+        "message": {
+          "type": "string",
+        },
+        "source": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "source",
+        "action",
+        "message",
+      ],
+      "type": "object",
     },
-    "message": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "source": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "source",
-    "action",
-    "message",
   ],
   "type": "object",
 }
@@ -3098,82 +4641,137 @@ exports[`tool schema snapshots > mindvault_register_onchain > input schema 1`] =
 
 exports[`tool schema snapshots > mindvault_register_onchain > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "after": {},
-        "before": {},
-        "changedFields": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "after": {},
+            "before": {},
+            "changedFields": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "failureGuidance": {
+              "type": [
+                "array",
+                "null",
+              ],
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "failureGuidance": {
-          "type": [
-            "array",
-            "null",
+          "required": [
+            "before",
+            "after",
+            "changedFields",
+            "txHash",
           ],
+          "type": "object",
         },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
           ],
+          "type": "object",
         },
-      },
-      "required": [
-        "before",
-        "after",
-        "changedFields",
-        "txHash",
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
           "type": "object",
         },
       },
       "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
-        },
-      },
-      "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -3209,31 +4807,86 @@ exports[`tool schema snapshots > mindvault_registry_count > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_registry_count > output schema 1`] = `
 {
-  "properties": {
-    "contract": {},
-    "count": {
-      "type": "integer",
+  "anyOf": [
+    {
+      "properties": {
+        "contract": {},
+        "count": {
+          "type": "integer",
+        },
+        "creator": {
+          "type": "string",
+        },
+        "creatorCount": {
+          "type": "integer",
+        },
+        "listedCount": {
+          "type": "integer",
+        },
+        "network": {},
+        "rpc": {},
+        "source": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "source",
+        "count",
+        "listedCount",
+        "contract",
+      ],
+      "type": "object",
     },
-    "creator": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "creatorCount": {
-      "type": "integer",
-    },
-    "listedCount": {
-      "type": "integer",
-    },
-    "network": {},
-    "rpc": {},
-    "source": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "source",
-    "count",
-    "listedCount",
-    "contract",
   ],
   "type": "object",
 }
@@ -3277,40 +4930,95 @@ exports[`tool schema snapshots > mindvault_registry_info > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_registry_info > output schema 1`] = `
 {
-  "properties": {
-    "contractId": {
-      "type": "string",
-    },
-    "mainnetDiagnostics": {
-      "type": "string",
-    },
-    "network": {
-      "type": "string",
-    },
-    "networkPassphrase": {
-      "type": "string",
-    },
-    "resourceFields": {
-      "items": {
-        "type": "string",
+  "anyOf": [
+    {
+      "properties": {
+        "contractId": {
+          "type": "string",
+        },
+        "mainnetDiagnostics": {
+          "type": "string",
+        },
+        "network": {
+          "type": "string",
+        },
+        "networkPassphrase": {
+          "type": "string",
+        },
+        "resourceFields": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "rpcUrl": {
+          "type": "string",
+        },
+        "x402Network": {
+          "type": "string",
+        },
       },
-      "type": "array",
+      "required": [
+        "contractId",
+        "networkPassphrase",
+        "rpcUrl",
+        "network",
+        "x402Network",
+        "resourceFields",
+        "mainnetDiagnostics",
+      ],
+      "type": "object",
     },
-    "rpcUrl": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "x402Network": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "contractId",
-    "networkPassphrase",
-    "rpcUrl",
-    "network",
-    "x402Network",
-    "resourceFields",
-    "mainnetDiagnostics",
   ],
   "type": "object",
 }
@@ -3355,36 +5063,91 @@ exports[`tool schema snapshots > mindvault_registry_list > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_registry_list > output schema 1`] = `
 {
-  "properties": {
-    "contract": {},
-    "count": {
-      "type": "integer",
+  "anyOf": [
+    {
+      "properties": {
+        "contract": {},
+        "count": {
+          "type": "integer",
+        },
+        "limit": {
+          "type": "integer",
+        },
+        "message": {
+          "type": "string",
+        },
+        "network": {},
+        "resources": {
+          "type": "array",
+        },
+        "rpc": {},
+        "source": {
+          "type": "string",
+        },
+        "start": {
+          "type": "integer",
+        },
+      },
+      "required": [
+        "source",
+        "start",
+        "limit",
+        "count",
+        "resources",
+        "contract",
+      ],
+      "type": "object",
     },
-    "limit": {
-      "type": "integer",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "message": {
-      "type": "string",
-    },
-    "network": {},
-    "resources": {
-      "type": "array",
-    },
-    "rpc": {},
-    "source": {
-      "type": "string",
-    },
-    "start": {
-      "type": "integer",
-    },
-  },
-  "required": [
-    "source",
-    "start",
-    "limit",
-    "count",
-    "resources",
-    "contract",
   ],
   "type": "object",
 }
@@ -3421,36 +5184,91 @@ exports[`tool schema snapshots > mindvault_registry_lookup > input schema 1`] = 
 
 exports[`tool schema snapshots > mindvault_registry_lookup > output schema 1`] = `
 {
-  "properties": {
-    "contract": {},
-    "creator": {},
-    "found": {
-      "type": "boolean",
+  "anyOf": [
+    {
+      "properties": {
+        "contract": {},
+        "creator": {},
+        "found": {
+          "type": "boolean",
+        },
+        "id": {},
+        "listed": {},
+        "message": {
+          "type": "string",
+        },
+        "metadata": {},
+        "network": {},
+        "next": {
+          "type": "string",
+        },
+        "price": {},
+        "resourceId": {
+          "type": "string",
+        },
+        "rpc": {},
+        "source": {
+          "type": "string",
+        },
+        "tags": {},
+      },
+      "required": [
+        "source",
+        "found",
+        "contract",
+      ],
+      "type": "object",
     },
-    "id": {},
-    "listed": {},
-    "message": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "metadata": {},
-    "network": {},
-    "next": {
-      "type": "string",
-    },
-    "price": {},
-    "resourceId": {
-      "type": "string",
-    },
-    "rpc": {},
-    "source": {
-      "type": "string",
-    },
-    "tags": {},
-  },
-  "required": [
-    "source",
-    "found",
-    "contract",
   ],
   "type": "object",
 }
@@ -3698,85 +5516,182 @@ exports[`tool schema snapshots > mindvault_royalty > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_royalty > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -3916,178 +5831,129 @@ exports[`tool schema snapshots > mindvault_search > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_search > output schema 1`] = `
 {
-  "properties": {
-    "items": {
-      "items": {
-        "properties": {
-          "accessUrl": {
-            "type": [
-              "string",
-              "null",
+  "anyOf": [
+    {
+      "properties": {
+        "items": {
+          "items": {
+            "properties": {
+              "accessUrl": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "price": {
+                "type": [
+                  "string",
+                  "number",
+                  "null",
+                ],
+              },
+              "tags": {
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+            },
+            "required": [
+              "id",
+              "title",
+              "price",
+              "description",
+              "accessUrl",
+              "tags",
             ],
+            "type": "object",
           },
-          "description": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "id": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "price": {
-            "type": [
-              "string",
-              "number",
-              "null",
-            ],
-          },
-          "tags": {
-            "items": {
+          "type": "array",
+        },
+        "notice": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "truncated": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "items",
+        "notice",
+        "truncated",
+      ],
+      "type": "object",
+    },
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
               "type": "string",
             },
-            "type": "array",
-          },
-          "title": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-        },
-        "required": [
-          "id",
-          "title",
-          "price",
-          "description",
-          "accessUrl",
-          "tags",
-        ],
-        "type": "object",
-      },
-      "type": "array",
-    },
-    "notice": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "truncated": {
-      "type": "boolean",
-    },
-  },
-  "required": [
-    "items",
-    "notice",
-    "truncated",
-  ],
-  "type": "object",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_server_endpoints > annotations 1`] = `
-{
-  "destructiveHint": false,
-  "idempotentHint": true,
-  "readOnlyHint": true,
-  "title": "Server Endpoints",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_server_endpoints > input schema 1`] = `
-{
-  "properties": {},
-  "required": [],
-  "type": "object",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_server_endpoints > output schema 1`] = `
-{
-  "properties": {
-    "baseUrl": {
-      "type": "string",
-    },
-    "endpointCount": {
-      "type": "integer",
-    },
-    "message": {
-      "type": "string",
-    },
-    "openapi": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "operations": {
-      "items": {
-        "properties": {
-          "method": {
-            "type": "string",
-          },
-          "operationId": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "path": {
-            "type": "string",
-          },
-          "summary": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "tags": {
-            "items": {
+            "category": {
               "type": "string",
             },
-            "type": "array",
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
           },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
-        "required": [
-          "method",
-          "path",
-          "operationId",
-          "tags",
-          "summary",
-        ],
-        "type": "object",
       },
-      "type": "array",
-    },
-    "paths": {
-      "items": {
-        "type": "string",
-      },
-      "type": "array",
-    },
-    "server": {
-      "type": [
-        "object",
-        "null",
+      "required": [
+        "troubleshooting",
       ],
+      "type": "object",
     },
-    "source": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "source",
-    "baseUrl",
-    "openapi",
-    "server",
-    "endpointCount",
-    "operations",
-    "paths",
-    "message",
   ],
   "type": "object",
 }
@@ -4140,85 +6006,182 @@ exports[`tool schema snapshots > mindvault_set_listed > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_set_listed > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -4275,85 +6238,182 @@ exports[`tool schema snapshots > mindvault_set_price > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_set_price > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -4452,21 +6512,76 @@ exports[`tool schema snapshots > mindvault_setup_wallet > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_setup_wallet > output schema 1`] = `
 {
-  "properties": {
-    "address": {
-      "type": "string",
+  "anyOf": [
+    {
+      "properties": {
+        "address": {
+          "type": "string",
+        },
+        "persisted": {
+          "type": "boolean",
+        },
+        "profile": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "profile",
+        "address",
+        "persisted",
+      ],
+      "type": "object",
     },
-    "persisted": {
-      "type": "boolean",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "profile": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "profile",
-    "address",
-    "persisted",
   ],
   "type": "object",
 }
@@ -4506,6 +6621,51 @@ exports[`tool schema snapshots > mindvault_switch_network_profile > input schema
 `;
 
 exports[`tool schema snapshots > mindvault_switch_network_profile > output schema 1`] = `null`;
+
+exports[`tool schema snapshots > mindvault_terms > annotations 1`] = `
+{
+  "destructiveHint": false,
+  "idempotentHint": true,
+  "readOnlyHint": false,
+  "title": "Publisher Terms",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_terms > input schema 1`] = `
+{
+  "properties": {
+    "confirmMainnet": {
+      "description": "Required for set on mainnet (or set MINDVAULT_ALLOW_MAINNET=1).",
+      "type": "boolean",
+    },
+    "creator": {
+      "description": "Creator Stellar address to inspect. Optional for get when a wallet is active; set always uses the active wallet.",
+      "type": "string",
+    },
+    "operation": {
+      "description": "Whether to read or update the creator terms hash.",
+      "enum": [
+        "get",
+        "set",
+      ],
+      "type": "string",
+    },
+    "termsHash": {
+      "description": "Terms document hash or content-addressed digest to store (maximum 64 bytes). Required for set.",
+      "examples": [
+        "sha256:0123456789abcdef",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "operation",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool schema snapshots > mindvault_terms > output schema 1`] = `null`;
 
 exports[`tool schema snapshots > mindvault_transfer_ownership > annotations 1`] = `
 {
@@ -4553,85 +6713,182 @@ exports[`tool schema snapshots > mindvault_transfer_ownership > input schema 1`]
 
 exports[`tool schema snapshots > mindvault_transfer_ownership > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -4670,52 +6927,107 @@ exports[`tool schema snapshots > mindvault_tx_status > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_tx_status > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "applicationOrder": {},
-        "envelopeXdr": {},
-        "feeBump": {},
-        "hash": {
-          "type": "string",
-        },
-        "latestLedger": {},
-        "ledger": {},
-        "ledgerCloseTime": {
-          "type": [
-            "string",
-            "null",
+      "oneOf": [
+        {
+          "properties": {
+            "applicationOrder": {},
+            "envelopeXdr": {},
+            "feeBump": {},
+            "hash": {
+              "type": "string",
+            },
+            "latestLedger": {},
+            "ledger": {},
+            "ledgerCloseTime": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "message": {
+              "type": "string",
+            },
+            "oldestLedger": {},
+            "resultMetaXdr": {},
+            "resultXdr": {},
+            "status": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "hash",
           ],
+          "type": "object",
         },
-        "message": {
-          "type": "string",
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
         },
-        "oldestLedger": {},
-        "resultMetaXdr": {},
-        "resultXdr": {},
-        "status": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "status",
-        "hash",
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -4771,85 +7083,182 @@ exports[`tool schema snapshots > mindvault_update_metadata > input schema 1`] = 
 
 exports[`tool schema snapshots > mindvault_update_metadata > output schema 1`] = `
 {
-  "oneOf": [
+  "anyOf": [
     {
-      "properties": {
-        "listed": {
-          "type": "boolean",
-        },
-        "metadata": {
-          "type": "string",
-        },
-        "newCreator": {
-          "type": "string",
-        },
-        "price": {
-          "type": "string",
-        },
-        "resourceId": {
-          "type": "string",
-        },
-        "status": {
-          "type": "string",
-        },
-        "txHash": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "status",
-        "resourceId",
-        "txHash",
-      ],
-      "type": "object",
-    },
-    {
-      "properties": {
-        "intentions": {
-          "type": "object",
-        },
-        "mode": {
-          "const": "dry-run",
-          "type": "string",
-        },
-        "operation": {
-          "type": "string",
-        },
-        "steps": {
-          "items": {
-            "type": "string",
+      "oneOf": [
+        {
+          "properties": {
+            "confirmed": {
+              "type": "boolean",
+            },
+            "listed": {
+              "type": "boolean",
+            },
+            "message": {
+              "type": "string",
+            },
+            "metadata": {
+              "type": "string",
+            },
+            "newCreator": {
+              "type": "string",
+            },
+            "price": {
+              "type": "string",
+            },
+            "reason": {
+              "enum": [
+                "confirmation_timeout",
+                "rpc_unavailable",
+              ],
+              "type": "string",
+            },
+            "resourceId": {
+              "type": "string",
+            },
+            "status": {
+              "description": ""success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.",
+              "type": "string",
+            },
+            "statusLookup": {
+              "properties": {
+                "arguments": {
+                  "properties": {
+                    "txHash": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "txHash",
+                  ],
+                  "type": "object",
+                },
+                "retryable": {
+                  "type": "boolean",
+                },
+                "tool": {
+                  "const": "mindvault_tx_status",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "arguments",
+                "retryable",
+              ],
+              "type": "object",
+            },
+            "txHash": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
           },
-          "type": "array",
-        },
-        "validation": {
+          "required": [
+            "status",
+            "resourceId",
+            "txHash",
+          ],
           "type": "object",
         },
-      },
-      "required": [
-        "mode",
-        "operation",
-        "validation",
-        "intentions",
-        "steps",
+        {
+          "properties": {
+            "intentions": {
+              "type": "object",
+            },
+            "mode": {
+              "const": "dry-run",
+              "type": "string",
+            },
+            "operation": {
+              "type": "string",
+            },
+            "steps": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "validation": {
+              "type": "object",
+            },
+          },
+          "required": [
+            "mode",
+            "operation",
+            "validation",
+            "intentions",
+            "steps",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string",
+            },
+            "status": {
+              "const": "text",
+              "type": "string",
+            },
+          },
+          "required": [
+            "status",
+            "message",
+          ],
+          "type": "object",
+        },
       ],
       "type": "object",
     },
     {
       "properties": {
-        "message": {
-          "type": "string",
-        },
-        "status": {
-          "const": "text",
-          "type": "string",
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
         },
       },
       "required": [
-        "status",
-        "message",
+        "troubleshooting",
       ],
       "type": "object",
     },
@@ -4889,27 +7298,82 @@ exports[`tool schema snapshots > mindvault_use_profile > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_use_profile > output schema 1`] = `
 {
-  "properties": {
-    "address": {
-      "type": [
-        "string",
-        "null",
+  "anyOf": [
+    {
+      "properties": {
+        "address": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "profile": {
+          "type": "string",
+        },
+        "publisherRegistered": {
+          "type": [
+            "boolean",
+            "null",
+          ],
+        },
+      },
+      "required": [
+        "profile",
+        "address",
+        "publisherRegistered",
       ],
+      "type": "object",
     },
-    "profile": {
-      "type": "string",
-    },
-    "publisherRegistered": {
-      "type": [
-        "boolean",
-        "null",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
       ],
+      "type": "object",
     },
-  },
-  "required": [
-    "profile",
-    "address",
-    "publisherRegistered",
   ],
   "type": "object",
 }
@@ -4957,56 +7421,111 @@ exports[`tool schema snapshots > mindvault_verify_attestation > input schema 1`]
 
 exports[`tool schema snapshots > mindvault_verify_attestation > output schema 1`] = `
 {
-  "properties": {
-    "contract": {
-      "type": "string",
-    },
-    "expectedAttestationHash": {
-      "type": "string",
-    },
-    "matches": {
-      "type": "boolean",
-    },
-    "network": {
-      "type": [
-        "string",
-        "null",
+  "anyOf": [
+    {
+      "properties": {
+        "contract": {
+          "type": "string",
+        },
+        "expectedAttestationHash": {
+          "type": "string",
+        },
+        "matches": {
+          "type": "boolean",
+        },
+        "network": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "registeredAttestationHash": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "resourceId": {
+          "type": "string",
+        },
+        "rpc": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "source": {
+          "type": "string",
+        },
+        "summary": {
+          "type": "string",
+        },
+        "verified": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "source",
+        "resourceId",
+        "expectedAttestationHash",
+        "registeredAttestationHash",
+        "matches",
+        "verified",
+        "summary",
+        "contract",
       ],
+      "type": "object",
     },
-    "registeredAttestationHash": {
-      "type": [
-        "string",
-        "null",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
       ],
+      "type": "object",
     },
-    "resourceId": {
-      "type": "string",
-    },
-    "rpc": {
-      "type": [
-        "string",
-        "null",
-      ],
-    },
-    "source": {
-      "type": "string",
-    },
-    "summary": {
-      "type": "string",
-    },
-    "verified": {
-      "type": "boolean",
-    },
-  },
-  "required": [
-    "source",
-    "resourceId",
-    "expectedAttestationHash",
-    "registeredAttestationHash",
-    "matches",
-    "verified",
-    "summary",
-    "contract",
   ],
   "type": "object",
 }
@@ -5031,225 +7550,6 @@ exports[`tool schema snapshots > mindvault_verify_install > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_verify_install > output schema 1`] = `null`;
 
-exports[`tool schema snapshots > mindvault_wallet_balances > annotations 1`] = `
-{
-  "destructiveHint": false,
-  "idempotentHint": true,
-  "readOnlyHint": true,
-  "title": "Wallet Balances",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_wallet_balances > input schema 1`] = `
-{
-  "properties": {},
-  "required": [],
-  "type": "object",
-}
-`;
-
-exports[`tool schema snapshots > mindvault_wallet_balances > output schema 1`] = `
-{
-  "properties": {
-    "agents": {
-      "items": {
-        "properties": {
-          "active": {
-            "type": [
-              "boolean",
-              "null",
-            ],
-          },
-          "address": {
-            "type": "string",
-          },
-          "note": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "profile": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "publisherRegistered": {
-            "type": [
-              "boolean",
-              "null",
-            ],
-          },
-          "usdcBalance": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "usdcStatus": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "xlmAvailable": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "xlmBalance": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-          "xlmReserve": {
-            "type": [
-              "string",
-              "null",
-            ],
-          },
-        },
-        "required": [
-          "profile",
-          "address",
-          "active",
-          "publisherRegistered",
-          "xlmBalance",
-          "xlmReserve",
-          "xlmAvailable",
-          "usdcBalance",
-          "usdcStatus",
-          "note",
-        ],
-        "type": "object",
-      },
-      "type": "array",
-    },
-    "count": {
-      "type": "integer",
-    },
-    "message": {
-      "type": "string",
-    },
-    "platform": {
-      "properties": {
-        "active": {
-          "type": [
-            "boolean",
-            "null",
-          ],
-        },
-        "address": {
-          "type": "string",
-        },
-        "configured": {
-          "type": "boolean",
-        },
-        "note": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "profile": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "publisherRegistered": {
-          "type": [
-            "boolean",
-            "null",
-          ],
-        },
-        "usdcBalance": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "usdcStatus": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "xlmAvailable": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "xlmBalance": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-        "xlmReserve": {
-          "type": [
-            "string",
-            "null",
-          ],
-        },
-      },
-      "required": [
-        "configured",
-        "profile",
-        "address",
-        "active",
-        "publisherRegistered",
-        "xlmBalance",
-        "xlmReserve",
-        "xlmAvailable",
-        "usdcBalance",
-        "usdcStatus",
-        "note",
-      ],
-      "type": [
-        "object",
-        "null",
-      ],
-    },
-    "requestedAt": {
-      "type": "string",
-    },
-    "source": {
-      "type": "string",
-    },
-    "statistics": {
-      "properties": {
-        "totalUsdc": {
-          "type": "string",
-        },
-        "totalXlm": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "totalUsdc",
-        "totalXlm",
-      ],
-      "type": "object",
-    },
-  },
-  "required": [
-    "source",
-    "requestedAt",
-    "platform",
-    "agents",
-    "count",
-    "statistics",
-    "message",
-  ],
-  "type": "object",
-}
-`;
-
 exports[`tool schema snapshots > mindvault_wallet_info > annotations 1`] = `
 {
   "destructiveHint": false,
@@ -5269,48 +7569,103 @@ exports[`tool schema snapshots > mindvault_wallet_info > input schema 1`] = `
 
 exports[`tool schema snapshots > mindvault_wallet_info > output schema 1`] = `
 {
-  "properties": {
-    "address": {
-      "type": "string",
-    },
-    "note": {
-      "type": [
-        "string",
-        "null",
+  "anyOf": [
+    {
+      "properties": {
+        "address": {
+          "type": "string",
+        },
+        "note": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "profile": {
+          "type": "string",
+        },
+        "publisherRegistered": {
+          "type": "boolean",
+        },
+        "usdcBalance": {
+          "type": "string",
+        },
+        "usdcStatus": {
+          "type": "string",
+        },
+        "xlmAvailable": {
+          "type": "string",
+        },
+        "xlmBalance": {
+          "type": "string",
+        },
+        "xlmReserve": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "profile",
+        "address",
+        "xlmBalance",
+        "xlmReserve",
+        "xlmAvailable",
+        "usdcBalance",
+        "usdcStatus",
+        "publisherRegistered",
+        "note",
       ],
+      "type": "object",
     },
-    "profile": {
-      "type": "string",
+    {
+      "properties": {
+        "troubleshooting": {
+          "properties": {
+            "action": {
+              "type": "string",
+            },
+            "category": {
+              "type": "string",
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "schema": {
+              "const": "mindvault.troubleshooting/v1",
+              "type": "string",
+            },
+            "source": {
+              "type": "string",
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null",
+              ],
+            },
+            "summary": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "schema",
+            "source",
+            "category",
+            "status",
+            "summary",
+            "detail",
+            "action",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "troubleshooting",
+      ],
+      "type": "object",
     },
-    "publisherRegistered": {
-      "type": "boolean",
-    },
-    "usdcBalance": {
-      "type": "string",
-    },
-    "usdcStatus": {
-      "type": "string",
-    },
-    "xlmAvailable": {
-      "type": "string",
-    },
-    "xlmBalance": {
-      "type": "string",
-    },
-    "xlmReserve": {
-      "type": "string",
-    },
-  },
-  "required": [
-    "profile",
-    "address",
-    "xlmBalance",
-    "xlmReserve",
-    "xlmAvailable",
-    "usdcBalance",
-    "usdcStatus",
-    "publisherRegistered",
-    "note",
   ],
   "type": "object",
 }
@@ -5321,30 +7676,30 @@ exports[`tool schema snapshots > the covered tool names are pinned 1`] = `
   "mindvault_accept_transfer",
   "mindvault_agent_status",
   "mindvault_backup_state",
-  "mindvault_batch_catalog_lookup",
   "mindvault_browse",
   "mindvault_buy",
+  "mindvault_buy_lease",
   "mindvault_cancel_transfer",
   "mindvault_check_bindings",
   "mindvault_check_consistency",
   "mindvault_check_state_permissions",
+  "mindvault_client_config",
   "mindvault_debug_bundle",
   "mindvault_export_receipts",
   "mindvault_fee_config",
   "mindvault_freeze",
   "mindvault_import_wallet",
+  "mindvault_lease_status",
   "mindvault_list_profiles",
   "mindvault_mainnet_banner",
   "mindvault_metrics",
   "mindvault_network_profile",
   "mindvault_pending_transfer",
   "mindvault_preview",
-  "mindvault_preview_metadata_hash",
   "mindvault_prewarm_catalog",
   "mindvault_publish",
   "mindvault_publish_batch",
   "mindvault_publish_status",
-  "mindvault_publish_template",
   "mindvault_purchase_history",
   "mindvault_recover_catalog_cache",
   "mindvault_register",
@@ -5362,19 +7717,18 @@ exports[`tool schema snapshots > the covered tool names are pinned 1`] = `
   "mindvault_rotate_publisher_key",
   "mindvault_royalty",
   "mindvault_search",
-  "mindvault_server_endpoints",
   "mindvault_set_listed",
   "mindvault_set_price",
   "mindvault_set_tags",
   "mindvault_setup_wallet",
   "mindvault_switch_network_profile",
+  "mindvault_terms",
   "mindvault_transfer_ownership",
   "mindvault_tx_status",
   "mindvault_update_metadata",
   "mindvault_use_profile",
   "mindvault_verify_attestation",
   "mindvault_verify_install",
-  "mindvault_wallet_balances",
   "mindvault_wallet_info",
 ]
 `;

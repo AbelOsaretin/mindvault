@@ -16,15 +16,35 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { listCatalogResources, readCatalogResource } from "./catalogResources.js";
+import {
+  SubmittedTransactionUnconfirmed,
+  signAndSendTracked,
+  submittedUnconfirmedResult,
+} from "./submittedTransaction.js";
+import {
+  SERVER_STATUS_URI,
+  createServerStatusWatcher,
+  serverStatusContents,
+  serverStatusResource,
+  type ServerStatusInput,
+} from "./serverStatusResource.js";
 import { PROMPT_DEFINITIONS, getPrompt } from "./prompts.js";
-import { createProgressEmitter, scopeProgressToRequest } from "./progress.js";
+import {
+  createProgressEmitter,
+  scopeProgressToRequest,
+  sequenceProgressNotifications,
+} from "./progress.js";
 import { truncateResponse } from "./truncation.js";
 import { applyPreviewLimits, serializePreview } from "./previewLimits.js";
 import { createEd25519Signer } from "@x402/stellar";
@@ -46,7 +66,7 @@ import {
   assertPaidOperationConfirmed,
   formatPaidConfirmationDiagnostics,
 } from "./paidOperations.js";
-import { assertToolAllowedInReadOnlyMode } from "./readOnlyMode.js";
+import { assertToolAllowedInReadOnlyMode, readOnlyModeEnabled } from "./readOnlyMode.js";
 import {
   createMetricsRecorder,
   measureTool,
@@ -78,7 +98,8 @@ import { exportReceiptsTool } from "./receipts.js";
 import { debugBundleTool } from "./debugBundle.js";
 import { exportReceiptsToolWithTimeout } from "./receipts.js";
 import { normalizeToolResult, outcomeText, type ToolOutcome } from "./toolResult.js";
-import { advertisedTools, hasOutputSchema } from "./toolSurface.js";
+import { advertisedTools, hasOutputSchema, outputSchemaFor } from "./toolSurface.js";
+import { enforceOutputContract } from "./outputValidation.js";
 import { dryRunPublish, dryRunBuy } from "./dryRun.js";
 import { initAuditLogging } from "./auditLog.js";
 import { REGISTRY_LIST_DEFAULT_LIMIT, REGISTRY_LIST_DEFAULT_START } from "./registryPagination.js";
@@ -2647,17 +2668,29 @@ export async function updateMetadata(resourceId: string, metadata: string): Prom
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Update metadata", resourceId, err, { metadata }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Update metadata submission failed for resource "${resourceId}"`,
@@ -2666,7 +2699,6 @@ export async function updateMetadata(resourceId: string, metadata: string): Prom
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "metadata",
@@ -2736,17 +2768,29 @@ export async function setPrice(resourceId: string, price: string): Promise<strin
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Set price", resourceId, err, { price }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set price submission failed for resource "${resourceId}"`,
@@ -2755,7 +2799,6 @@ export async function setPrice(resourceId: string, price: string): Promise<strin
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "price",
@@ -2823,17 +2866,29 @@ export async function transferOwnership(resourceId: string, newCreator: string):
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Transfer ownership", resourceId, err, { newCreator }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Transfer ownership submission failed for resource "${resourceId}"`,
@@ -2842,7 +2897,6 @@ export async function transferOwnership(resourceId: string, newCreator: string):
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "transferred",
@@ -2910,17 +2964,29 @@ export async function setListed(resourceId: string, listed: boolean): Promise<st
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Set listed", resourceId, err, { listed }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set listed submission failed for resource "${resourceId}"`,
@@ -2929,7 +2995,6 @@ export async function setListed(resourceId: string, listed: boolean): Promise<st
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   return JSON.stringify(
     {
       status: "success",
@@ -2989,17 +3054,30 @@ export async function setTags(resourceId: string, tags: string[]): Promise<strin
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return [
+        `Tags submitted for resource "${resourceId}" but not confirmed.`,
+        `Tags: ${tags.length > 0 ? tags.join(", ") : "(none)"}`,
+        `Tx hash: ${err.txHash}`,
+        submittedUnconfirmedResult("Set tags", resourceId, err).message,
+      ].join("\n");
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set tags submission failed for resource "${resourceId}"`,
@@ -3008,7 +3086,6 @@ export async function setTags(resourceId: string, tags: string[]): Promise<strin
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   return [
     `Tags updated for resource "${resourceId}".`,
     `Tags: ${tags.length > 0 ? tags.join(", ") : "(none)"}`,
@@ -4169,10 +4246,56 @@ export function normalizeToolResultForTest(name: string, outcome: ToolOutcome) {
   return normalizeToolResult(name, outcome, hasOutputSchema);
 }
 
-const server = new Server(
-  { name: "mindvault", version: "1.0.0" },
-  { capabilities: { tools: {}, prompts: {}, resources: {} } },
-);
+const SERVER_IDENTITY = { name: "mindvault", version: "1.0.0" };
+
+const server = new Server(SERVER_IDENTITY, {
+  capabilities: { tools: {}, prompts: {}, resources: { subscribe: true } },
+});
+
+// ── Server status resource (#1064) ──────────────────────────────────────────
+// mindvault://server/status: the active network, registry contract, tool
+// capability version, and safe operational flags. Built from live values on
+// every read, so it follows profile and network switches; wallet state is
+// reduced to booleans and nothing secret or identifying is included.
+
+function serverStatusInput(): ServerStatusInput {
+  const profile = activeProfile();
+  return {
+    serverName: SERVER_IDENTITY.name,
+    serverVersion: SERVER_IDENTITY.version,
+    stellarNetwork: STELLAR_NETWORK,
+    x402Network: NETWORK,
+    registryContractId: REGISTRY_CONTRACT_ID,
+    networkPassphrase: REGISTRY_NETWORK_PASSPHRASE,
+    tools: advertisedTools(process.env),
+    readOnly: readOnlyModeEnabled(process.env),
+    mock: _isMock(),
+    walletConfigured: !!profile.wallet,
+    publisherRegistered: !!profile.apiKey,
+  };
+}
+
+/** Test helper: the status resource exactly as resources/read returns it. */
+export function readServerStatusForTest() {
+  return serverStatusContents(serverStatusInput());
+}
+
+const serverStatus = createServerStatusWatcher(() => serverStatusContents(serverStatusInput()));
+
+server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  if (!serverStatus.subscribe(request.params.uri)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Only ${SERVER_STATUS_URI} supports subscriptions; catalog resources do not.`,
+    );
+  }
+  return {};
+});
+
+server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  serverStatus.unsubscribe(request.params.uri);
+  return {};
+});
 
 // ── MCP resources (#545) ─────────────────────────────────────────────────────
 // The vault catalog is exposed as resources so agents can discover entries
@@ -4181,11 +4304,15 @@ const server = new Server(
 // return gated content — only the public meta endpoint is consulted.
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: await listCatalogResources(),
+  resources: [serverStatusResource(), ...(await listCatalogResources())],
 }));
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
-  contents: [await readCatalogResource(request.params.uri)],
+  contents: [
+    request.params.uri === SERVER_STATUS_URI
+      ? serverStatusContents(serverStatusInput())
+      : await readCatalogResource(request.params.uri),
+  ],
 }));
 
 // ListTools is derived from TOOL_DEFINITIONS rather than restated here (#596).
@@ -4202,12 +4329,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args = {} } = request.params;
   const progressToken = request.params._meta?.progressToken;
+  // Compared after the call so a subscriber hears about a profile or network
+  // switch (#1064). Only computed while someone is subscribed.
+  const statusBefore = serverStatus.subscribed ? serverStatus.snapshot() : undefined;
   // Settled in `finally`, before the result is returned, so every progress
   // notification for this call goes out ahead of it and none after (#841).
   const progress =
     progressToken != null
       ? scopeProgressToRequest(
-          createProgressEmitter({ token: progressToken, send: extra.sendNotification }),
+          createProgressEmitter({
+            token: progressToken,
+            // Stamped with a replay-safe event id per notification (#1061).
+            send: sequenceProgressNotifications(extra.sendNotification),
+          }),
         )
       : undefined;
   try {
@@ -4220,16 +4354,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     if (metricsExportToConsoleEnabled(process.env) && metrics.enabled) {
       console.error(metricsExportLine(metrics.snapshot(), "otlp"));
     }
-    return normalizeToolResult(name, result, hasOutputSchema);
+    // Checked against the advertised outputSchema before it is sent (#1062).
+    return enforceOutputContract(
+      name,
+      normalizeToolResult(name, result, hasOutputSchema),
+      outputSchemaFor(name),
+    );
   } catch (err: any) {
     const mapped = mappedErrorOf(err);
-    return {
-      content: [{ type: "text", text: `Error: ${safeErrorMessage(err)}` }],
-      isError: true,
-      ...(mapped ? { structuredContent: { troubleshooting: troubleshootingHint(mapped) } } : {}),
-    };
+    return enforceOutputContract(
+      name,
+      {
+        content: [{ type: "text", text: `Error: ${safeErrorMessage(err)}` }],
+        isError: true,
+        ...(mapped ? { structuredContent: { troubleshooting: troubleshootingHint(mapped) } } : {}),
+      },
+      outputSchemaFor(name),
+    );
   } finally {
     await progress?.settle();
+    if (statusBefore !== undefined && serverStatus.changedSince(statusBefore)) {
+      void server.sendResourceUpdated({ uri: SERVER_STATUS_URI }).catch(() => {});
+    }
   }
 });
 

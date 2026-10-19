@@ -15,6 +15,7 @@
  */
 
 import { catalogFilterInputProperties } from "./catalogFilters.js";
+import { withToolErrorVariant } from "./outputValidation.js";
 import {
   AGENT_STATUS_OUTPUT_SCHEMA,
   ATTESTATION_VERIFICATION_OUTPUT_SCHEMA,
@@ -109,7 +110,7 @@ export interface ToolDefinition {
   annotations: ToolAnnotations;
 }
 
-export const TOOL_DEFINITIONS: ToolDefinition[] = [
+const DEFINED_TOOLS: ToolDefinition[] = [
   {
     name: "mindvault_setup_wallet",
     description:
@@ -1780,3 +1781,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
 ];
+
+/**
+ * Every tool, as advertised. A structured tool's `outputSchema` covers both
+ * of its results: the success payload, or the troubleshooting hint a failed
+ * call carries (#1062). Clients validate `structuredContent` on errors too, so
+ * a schema that described only success turned every mapped failure into a
+ * client-side validation exception.
+ */
+export const TOOL_DEFINITIONS: ToolDefinition[] = DEFINED_TOOLS.map((tool) =>
+  tool.outputSchema ? { ...tool, outputSchema: withToolErrorVariant(tool.outputSchema) } : tool,
+);

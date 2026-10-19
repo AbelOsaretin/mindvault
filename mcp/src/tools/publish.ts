@@ -53,6 +53,11 @@ import {
 } from "../settlement.js";
 import { assertTransactionFeeWithinCeiling } from "../paymentCeiling.js";
 import { usdcToStroops as toStroops } from "../usdcAmount.js";
+import {
+  SubmittedTransactionUnconfirmed,
+  signAndSendTracked,
+  txStatusLookup,
+} from "../submittedTransaction.js";
 /**
  * Decimal USDC as on-chain stroops, throwing on an amount the shared converter
  * will not accept — a price that cannot be expressed exactly must not be
@@ -764,6 +769,11 @@ export interface BatchPublishSummary {
   onchainStatus: string;
   txHash: string | null;
   items: BatchPublishItemResult[];
+  /**
+   * Present when the batch transaction was submitted but not confirmed
+   * (`onchainStatus: "submitted"`): how to check its outcome (#1060).
+   */
+  statusLookup?: ReturnType<typeof txStatusLookup>;
 }
 
 /**
@@ -946,6 +956,7 @@ export async function publishBatch(
 
   let txHash: string | null = null;
   let batchOnchainStatus = "skipped";
+  let unconfirmed = false;
 
   if (verifiedItems.length > 0) {
     const client = createRegistryClient({
@@ -993,27 +1004,41 @@ export async function publishBatch(
     const { Keypair, Transaction } = await import("@stellar/stellar-sdk");
     const keypair = Keypair.fromSecret(wallet.secretKey);
     try {
-      const sentTx = await batchTx.signAndSend({
-        signTransaction: async (xdr: string) => {
-          const tx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-          tx.sign(keypair);
-          return { signedTxXdr: tx.toXDR() };
-        },
-      });
-      txHash = sentTx?.sendTransactionResponse?.hash ?? null;
+      ({ txHash } = await signAndSendTracked((watcher) =>
+        batchTx.signAndSend({
+          signTransaction: async (xdr: string) => {
+            const tx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+            tx.sign(keypair);
+            return { signedTxXdr: tx.toXDR() };
+          },
+          watcher,
+        }),
+      ));
       batchOnchainStatus = "registered";
     } catch (err: any) {
-      throw mcpError(
-        mapRegistryError({
-          operation: "register_batch submission failed",
-          message: err?.message || String(err),
-        }),
-      );
+      // Submitted but unconfirmed (#1060): the items are already published, so
+      // report them with the hash and a status lookup rather than throwing
+      // both away and inviting a second register_batch.
+      if (!(err instanceof SubmittedTransactionUnconfirmed)) {
+        throw mcpError(
+          mapRegistryError({
+            operation: "register_batch submission failed",
+            message: err?.message || String(err),
+          }),
+        );
+      }
+      txHash = err.txHash;
+      batchOnchainStatus = "submitted";
+      unconfirmed = true;
     }
 
-    // Update per-item onchain status from the batch result data.
+    // Update per-item onchain status from the batch result data. An
+    // unconfirmed batch has no result data yet: every approved item is
+    // "submitted" until mindvault_tx_status says otherwise.
     const batchResultData =
-      batchResult && typeof batchResult.unwrap === "function" ? batchResult.unwrap() : null;
+      !unconfirmed && batchResult && typeof batchResult.unwrap === "function"
+        ? batchResult.unwrap()
+        : null;
     const succeededIds = new Set<string>(
       batchResultData?.succeeded ?? verifiedItems.map((v) => v.id),
     );
@@ -1021,7 +1046,9 @@ export async function publishBatch(
 
     for (const r of results) {
       if (r.verificationStatus === "approved") {
-        if (succeededIds.has(r.id!)) {
+        if (unconfirmed) {
+          r.onchainStatus = "submitted";
+        } else if (succeededIds.has(r.id!)) {
           r.onchainStatus = "registered";
         } else {
           const failedEntry = failedPairs.find(([idx]) => verifiedItems[idx]?.id === r.id);
@@ -1053,6 +1080,7 @@ export async function publishBatch(
     onchainStatus: batchOnchainStatus,
     txHash,
     items: results,
+    ...(unconfirmed && txHash ? { statusLookup: txStatusLookup(txHash) } : {}),
   };
 
   return JSON.stringify(summary, null, 2);
