@@ -1379,7 +1379,16 @@ async function setupWallet(profileArg?: string): Promise<ToolOutcome> {
 async function repairSponsoredAccount(secretKey: string, profileArg?: string): Promise<string> {
   const target = resolveProfileName(profileArg);
   const { Keypair } = await import("@stellar/stellar-sdk");
-  const publicKey = Keypair.fromSecret(secretKey).publicKey();
+  let publicKey: string;
+  try {
+    publicKey = Keypair.fromSecret(secretKey).publicKey();
+  } catch (err) {
+    // Never echo the secret key in error messages — describe the shape problem instead.
+    throw new Error(
+      `Invalid Stellar secret key: could not derive public key. ` +
+        `Expected S followed by 55 base32 characters (${safeErrorMessage(err)}).`,
+    );
+  }
   const details = await getBalanceDetails(publicKey);
 
   if (details.status === "missing") {
