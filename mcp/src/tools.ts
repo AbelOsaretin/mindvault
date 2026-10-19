@@ -35,6 +35,8 @@ import {
   PUBLISH_BATCH_OUTPUT_SCHEMA,
   PUBLISH_STATUS_OUTPUT_SCHEMA,
   PUBLISH_TEMPLATE_OUTPUT_SCHEMA,
+  PROFILE_EXPORT_OUTPUT_SCHEMA,
+  PROFILE_IMPORT_OUTPUT_SCHEMA,
   PURCHASE_HISTORY_OUTPUT_SCHEMA,
   BUY_OUTPUT_SCHEMA,
   RECOVER_CACHE_OUTPUT_SCHEMA,
@@ -214,6 +216,36 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     annotations: {
       title: "List Profiles",
       readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  {
+    name: "mindvault_export_profiles",
+    description:
+      "Export versioned, non-secret profile setup metadata for a team. The payload contains profile names, network preferences, and safe user preferences only; wallet secret keys, private keys, seed phrases, and publisher API keys are never included.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+    outputSchema: PROFILE_EXPORT_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+    annotations: {
+      title: "Export Profile Setup",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  {
+    name: "mindvault_import_profiles",
+    description:
+      "Import a versioned, non-secret profile setup payload. It merges profile names and preferences without overwriting wallet credentials or publisher API keys.",
+    inputSchema: {
+      type: "object",
+      properties: { data: { type: "string", description: "JSON profile-export payload." } },
+      required: ["data"],
+    },
+    outputSchema: PROFILE_IMPORT_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+    annotations: {
+      title: "Import Profile Setup",
+      readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
     },

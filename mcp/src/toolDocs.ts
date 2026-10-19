@@ -37,7 +37,10 @@ export const REGENERATE_COMMAND = "pnpm --filter @mindvault/mcp generate-tool-do
 export function groupOf(name: string): string {
   if (["mindvault_setup_wallet", "mindvault_wallet_info", "mindvault_import_wallet"].includes(name))
     return "Wallet";
-  if (["mindvault_use_profile", "mindvault_list_profiles"].includes(name)) return "Profiles";
+  if (
+    ["mindvault_use_profile", "mindvault_list_profiles", "mindvault_export_profiles", "mindvault_import_profiles"].includes(name)
+  )
+    return "Profiles";
   if (["mindvault_browse", "mindvault_search", "mindvault_preview"].includes(name))
     return "Catalog";
   if (

@@ -67,6 +67,8 @@ that want to branch on the failure rather than parse prose.
 | `mindvault_wallet_info`        | —                      | —        | takes no arguments                                        |
 | `mindvault_use_profile`        | `name`                 | yes      | letters, digits, dot, dash, underscore (1–64)             |
 | `mindvault_list_profiles`      | —                      | —        | takes no arguments                                        |
+| `mindvault_export_profiles`   | —                      | —        | takes no arguments                                        |
+| `mindvault_import_profiles`   | `data`                 | yes      | versioned profile-export JSON                             |
 | `mindvault_browse`             | `query`                | no       | keyword search; matches title or description              |
 |                                | `minPrice`, `maxPrice` | no       | inclusive numeric USDC bounds; `"0.50"` equals `"0.5"`    |
 |                                | `verificationStatus`   | no       | `pending`, `verified`, `rejected`, `skipped`              |

@@ -5,7 +5,7 @@
 
 This file is a generated, human-readable summary of the MCP tool surface (ListTools). It is scoped to the `mcp/` package and intended as a quick reference for integrators and reviewers.
 
-Generated from `mcp/src/tools.ts` (40 tools).
+Generated from `mcp/src/tools.ts` (42 tools).
 
 ## Tools
 
@@ -14,6 +14,8 @@ Generated from `mcp/src/tools.ts` (40 tools).
 - `mindvault_repair_sponsored_account`: Repair a half-created sponsored account. Derives the address from a recovered secret key, re-fetches its Horizon balances, and restores the wallet to a local profile only when the on-chain account exists. The secret is never returned.
 - `mindvault_use_profile`: Switch the active wallet profile, creating it if it does not exist. Profiles let one agent keep separate identities (e.g. testnet vs mainnet, publisher vs buyer); each has its own wallet and publisher API key. Subsequent tools operate on the active profile.
 - `mindvault_list_profiles`: List all named wallet profiles, marking the active one and showing each profile's wallet address and whether it is registered as a publisher. Secret keys are never shown.
+- `mindvault_export_profiles`: Export versioned, non-secret profile setup metadata for a team. Wallet secret keys, private keys, seed phrases, and publisher API keys are never included.
+- `mindvault_import_profiles`: Import a versioned, non-secret profile setup payload without overwriting wallet credentials or publisher API keys.
 - `mindvault_switch_network_profile`: Switch the active wallet profile and Stellar network together, then re-run install verification for the selected network.
 - `mindvault_browse`: List resources in the MindVault catalog with the same optional filters as mindvault_search and GET /resources: keyword, price range, verification status, resource type, owner, sort, pagination, tags, and listed state. Sort accepts newest, price_asc, price_desc, or title; results are ordered client-side too, so the order holds even when the backend ignores the parameter.
 - `mindvault_search`: Search the MindVault catalog by keyword and optional filters for price, resource type, verification status, owner, sort, pagination, tags, and listed state. Uses server-side filtering where supported and returns compact resource summaries.
