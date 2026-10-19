@@ -99,6 +99,8 @@ import {
   DEFAULT_PROFILE,
   isValidProfileName,
   migrateState,
+  exportProfileState,
+  importProfileState,
   STATE_VERSION,
   type AgentWallet,
   type ProfileState,
@@ -123,6 +125,7 @@ import {
   type ResourceSubscriptionSnapshot,
 } from "./resourceSubscriptionTool.js";
 import { type ApiResponse } from "./apiResponse.js";
+import { readBoundedResponse, resolveMaxResponseBytes } from "./responseSize.js";
 import { safeErrorMessage, safeLog } from "./redaction.js";
 import {
   assertAutoPaymentWithinCeiling,
@@ -140,6 +143,7 @@ import {
   exportStateFile,
   restoreState,
   checkStatePermissions,
+  compareStateWithBackup,
   preserveLegacyState,
   quarantineStateFile,
   writeAtomically,
@@ -400,6 +404,10 @@ export function restoreStateTool(blob: string, passphrase: string): string {
   return restoreState(blob, passphrase, applyRestoredState, {
     expectedNetwork: NETWORK,
   });
+}
+
+export function compareStateBackupTool(blob: string, passphrase: string): string {
+  return JSON.stringify(compareStateWithBackup(blob, passphrase), null, 2);
 }
 
 function quarantineCorruptState(reason: string, detail: string): void {
@@ -851,7 +859,7 @@ async function jsonFetch(url: string, init?: RequestInit): Promise<ApiResponse<a
   res.headers.forEach((value, key) => {
     responseHeaders[key.toLowerCase()] = value;
   });
-  const text = await res.text();
+  const text = await readBoundedResponse(res, resolveMaxResponseBytes());
   try {
     return { ok: res.ok, status: res.status, data: JSON.parse(text), headers: responseHeaders };
   } catch {
@@ -1779,6 +1787,35 @@ function listProfilesOutcome(): ToolOutcome {
 
 export function listProfiles(): string {
   return outcomeText(listProfilesOutcome());
+}
+
+export function exportProfilesOutcome(): ToolOutcome {
+  const payload = exportProfileState({
+    version: STATE_VERSION,
+    activeProfile: activeProfileName,
+    profiles,
+  });
+  return { text: JSON.stringify(payload, null, 2), structured: payload };
+}
+
+export function importProfilesOutcome(data: string): ToolOutcome {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    throw new Error("Profile export must be valid JSON.");
+  }
+  const result = importProfileState(
+    { version: STATE_VERSION, activeProfile: activeProfileName, profiles },
+    parsed,
+  );
+  profiles = result.state.profiles;
+  activeProfileName = result.state.activeProfile;
+  saveState();
+  return {
+    text: `Imported ${result.imported.length} profile setup(s) without changing credentials.`,
+    structured: { imported: result.imported },
+  };
 }
 
 /**
@@ -3844,9 +3881,7 @@ const stateMutex = new Mutex();
 
 async function dispatchToolOutcome(
   name: string,
-  args: ValidatedArgs,
-  dryRunArgs: ValidatedArgs,
-  rawRecord: Record<string, unknown>,
+  rawArgs: unknown,
   onProgress?: (progress: number, total?: number, message?: string) => Promise<void>,
 ): Promise<ToolOutcome> {
   if (!isDispatchableTool(name)) {
@@ -3910,6 +3945,10 @@ async function dispatchToolOutcome(
         );
       case "mindvault_list_profiles":
         return listProfilesOutcome();
+      case "mindvault_export_profiles":
+        return exportProfilesOutcome();
+      case "mindvault_import_profiles":
+        return importProfilesOutcome(requiredString(args, "data"));
       case "mindvault_browse": {
         const parsed = parseCatalogFilters(rawRecord);
         return parsed.ok ? browseOutcome(parsed.filters) : parsed.error;
@@ -4064,6 +4103,11 @@ async function dispatchToolOutcome(
         return resetState(flag(args, "all"), rawRecord.confirm);
       case "mindvault_backup_state":
         return backupState(requiredString(args, "passphrase"), rawRecord.confirm);
+      case "mindvault_compare_state_backup":
+        return compareStateBackupTool(
+          requiredString(args, "blob"),
+          requiredString(args, "passphrase"),
+        );
       case "mindvault_resource_provenance":
         return provenanceChain(requiredString(args, "resourceId"));
       case "mindvault_resource_change_log":

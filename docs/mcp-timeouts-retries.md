@@ -1,5 +1,12 @@
 # MCP Timeouts and Retries
 
+## Pending Stellar transaction watcher
+
+Pending transaction watching is bounded by a caller timeout and emits progress
+with monotonically increasing counters. A terminal transaction event is emitted
+once, after which polling stops. Cancellation ends the watcher and releases any
+attached subscription cleanup callback.
+
 Every outbound HTTP call the MindVault MCP server makes runs under a deadline,
 and idempotent calls retry transient failures with bounded, jittered backoff.
 
