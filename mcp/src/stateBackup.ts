@@ -316,6 +316,21 @@ function normalizePersisted(raw: unknown): ProfileState {
     }
     if (typeof v.apiKey === "string" && v.apiKey.length > 0) profile.apiKey = v.apiKey;
     if (v.network === "testnet" || v.network === "mainnet") profile.network = v.network;
+    if (v.preferences && typeof v.preferences === "object" && !Array.isArray(v.preferences)) {
+      profile.preferences = {};
+      for (const [key, item] of Object.entries(v.preferences as Record<string, unknown>)) {
+        if (/secret|private|seed|credential|apikey|token|password/i.test(key)) continue;
+        if (
+          item === null ||
+          typeof item === "string" ||
+          typeof item === "number" ||
+          typeof item === "boolean"
+        ) {
+          profile.preferences[key] = item;
+        }
+      }
+      if (Object.keys(profile.preferences).length === 0) delete profile.preferences;
+    }
     profiles[name] = profile;
   }
   const requested = typeof obj.activeProfile === "string" ? obj.activeProfile : "default";

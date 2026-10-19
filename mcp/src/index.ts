@@ -99,6 +99,8 @@ import {
   DEFAULT_PROFILE,
   isValidProfileName,
   migrateState,
+  exportProfileState,
+  importProfileState,
   STATE_VERSION,
   type AgentWallet,
   type ProfileState,
@@ -1778,6 +1780,35 @@ function listProfilesOutcome(): ToolOutcome {
 
 export function listProfiles(): string {
   return outcomeText(listProfilesOutcome());
+}
+
+export function exportProfilesOutcome(): ToolOutcome {
+  const payload = exportProfileState({
+    version: STATE_VERSION,
+    activeProfile: activeProfileName,
+    profiles,
+  });
+  return { text: JSON.stringify(payload, null, 2), structured: payload };
+}
+
+export function importProfilesOutcome(data: string): ToolOutcome {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    throw new Error("Profile export must be valid JSON.");
+  }
+  const result = importProfileState(
+    { version: STATE_VERSION, activeProfile: activeProfileName, profiles },
+    parsed,
+  );
+  profiles = result.state.profiles;
+  activeProfileName = result.state.activeProfile;
+  saveState();
+  return {
+    text: `Imported ${result.imported.length} profile setup(s) without changing credentials.`,
+    structured: { imported: result.imported },
+  };
 }
 
 /**
@@ -3899,6 +3930,10 @@ async function dispatchToolOutcome(
         );
       case "mindvault_list_profiles":
         return listProfilesOutcome();
+      case "mindvault_export_profiles":
+        return exportProfilesOutcome();
+      case "mindvault_import_profiles":
+        return importProfilesOutcome(requiredString(args, "data"));
       case "mindvault_browse": {
         const parsed = parseCatalogFilters(rawRecord);
         return parsed.ok ? browseOutcome(parsed.filters) : parsed.error;

@@ -38,6 +38,8 @@ For client installation and configuration see
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | `mindvault_use_profile`   | Switch the active wallet profile, creating it if it does not exist. Profiles let one agent keep separate identities (e.g. testnet vs mainnet, publisher vs buyer); each has its own wallet and publisher API key. Subsequent tools operate on the active profile. | yes        |
 | `mindvault_list_profiles` | List all named wallet profiles, marking the active one and showing each profile's wallet address and whether it is registered as a publisher. Secret keys are never shown.                                                                                        | yes        |
+| `mindvault_export_profiles` | Export versioned profile names and non-secret preferences for team setup. Wallet secret keys, seed phrases, private keys, and publisher API keys are excluded.                                                                                                  | yes        |
+| `mindvault_import_profiles` | Import a credentials-free profile setup payload. Merges names and preferences without overwriting wallet credentials or publisher API keys.                                                                                                                   | yes        |
 
 ## Catalog
 

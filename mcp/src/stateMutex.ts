@@ -35,6 +35,7 @@ export const STATE_SERIALIZED_TOOLS: ReadonlySet<string> = new Set([
   "mindvault_setup_wallet",
   "mindvault_import_wallet",
   "mindvault_use_profile",
+  "mindvault_import_profiles",
   "mindvault_register",
   "mindvault_rotate_publisher_key",
   // Spend credentials read from the profile store.
