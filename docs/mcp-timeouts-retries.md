@@ -197,6 +197,45 @@ cannot fix them.
 When a server sends `Retry-After`, it is honoured in place of computed backoff,
 clamped to the max delay so a mistaken or hostile header cannot stall a call.
 
+#### Retry-After forms and clamping
+
+`Retry-After` arrives in one of two forms and both are understood
+([`parseRetryAfterMs`](../mcp/src/retry.ts)):
+
+- **delay-seconds** — a non-negative number of seconds, e.g. `Retry-After: 30`.
+- **HTTP-date** — an absolute timestamp, e.g.
+  `Retry-After: Thu, 01 Jan 2026 00:00:00 GMT`. A date already in the past
+  becomes `0`, so the retry proceeds immediately.
+
+Anything else (a missing header, an empty string, or an unparseable value like
+`soon`) is ignored and the caller falls back to computed backoff. The parsed
+delay is then clamped to `min(maxDelayMs, deadline)` by
+[`retryAfterDelay`](../mcp/src/retry.ts), so a hostile `Retry-After: 999999` or
+a date years in the future can only ever hold a call for the configured
+maximum — never an unbounded stall.
+
+#### Shared per-origin backoff for parallel calls
+
+A single MCP server can have several tool calls in flight at once. Without
+coordination, when one call is told to slow down (`429 Too Many Requests`), an
+unrelated call to the same origin keeps retrying into the same window and the
+server is hit again by every caller at once.
+
+[`mcp/src/rateLimitCoordinator.ts`](../mcp/src/rateLimitCoordinator.ts) keeps
+one shared "not before" deadline per origin:
+
+- A call that sees a `429` records the `Retry-After` delay it was given
+  (`noteRateLimit`). A `429` without a `Retry-After` records nothing — the
+  caller's own bounded backoff still applies.
+- Every call awaits that deadline before its next attempt (`acquire`), via the
+  `beforeAttempt` hook in `withRetry`.
+- Origins are independent: a backoff on `api.mindvault.io` never blocks a call
+  to `horizon.stellar.org`.
+- The recorded delay is clamped to a 60s ceiling, and the deadline only ever
+  moves forward, so two concurrent `429`s cannot shorten each other's wait.
+- `acquire` takes an `AbortSignal` and rejects promptly on cancellation, so a
+  wait never outlives the tool call that started it.
+
 ### Polling that outlives a failed request
 
 `mindvault_publish_status` with `wait: true` reads `/resources/:id/meta` and
@@ -227,9 +266,43 @@ MindVault MCP: retrying GET /resources — attempt 2/3 failed (HTTP 503); next a
 ### Coverage
 
 - [`mcp/src/retry.test.ts`](../mcp/src/retry.test.ts) — bounds, backoff, jitter,
-  `Retry-After`, and the retry-log format, with sleep and randomness injected
+  `Retry-After` (both forms, invalid, past, and extreme values), and the
+  retry-log format, with sleep and randomness injected
+- [`mcp/src/rateLimitCoordinator.test.ts`](../mcp/src/rateLimitCoordinator.test.ts)
+  — shared per-origin backoff: parallel `429`s coordinate, the wait is bounded,
+  unrelated origins stay unblocked, and cancellation is prompt
 - [`mcp/src/toolRetries.test.ts`](../mcp/src/toolRetries.test.ts) — real tools
   recovering from transient failures, and payments issued exactly once
 - [`mcp/src/publishStatusRetry.test.ts`](../mcp/src/publishStatusRetry.test.ts) —
   `mindvault_publish_status` stopping at a terminal status while a companion
   request exhausts its retries
+
+## Transaction wait policy
+
+A submitted Soroban transaction is not settled the moment the submit call
+returns — it still has to be included and committed on-chain. `mindvault_buy`
+lets the caller choose how long to wait before it hands back the purchase
+summary ([#1058](../mcp/src/settlement.ts)).
+
+| Policy                  | Behaviour                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `return-after-submit`   | Default. Return as soon as the payment response arrives, reporting the tx hash and any status. |
+| `wait-for-final-result` | Poll `getTransaction` until the transaction reaches a terminal status or the deadline passes.  |
+
+- Pass `waitPolicy: "wait-for-final-result"`, or the legacy shorthand
+  `wait: true`, to poll. `waitPolicy` wins when both are supplied.
+- `timeoutMs` (default 60000) and `intervalMs` (default 2000) bound the wait.
+  `timeoutMs` is clamped to a hard 300000 ms ceiling, so no caller can ask for
+  an unbounded wait.
+- Every result carries `txHash` and a `status` — `status` is `null` only when no
+  status could be read, never omitted — plus a `waitPolicy` describing which
+  behaviour ran and a `cancelled` flag set when an `AbortSignal` ended the wait
+  early.
+- The wait is cancellable: `pollSettlement` accepts an `AbortSignal` and
+  returns a `cancelled` result promptly rather than waiting out the interval.
+
+### Coverage
+
+- [`mcp/src/settlement.test.ts`](../mcp/src/settlement.test.ts) — policy
+  normalization, the legacy `wait: true` mapping, the bounded maximum wait,
+  cancellation, and the always-present `txHash`/`status` fields.
