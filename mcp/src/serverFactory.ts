@@ -37,7 +37,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { attachCorrelationId, correlationSuffix, withNewCorrelationId } from "./correlation.js";
-import { scopeProgressToRequest } from "./progress.js";
+import { scopeProgressToRequest, sequenceProgressNotifications } from "./progress.js";
 
 /** Anything the MCP SDK will accept in `server.connect`. */
 export interface McpTransport {
@@ -148,10 +148,16 @@ export function createMindVaultServer(
 
     const token = request.params?._meta?.progressToken;
     // Settled before the result is returned, so a progress notification is
-    // never sent after it (#841).
+    // never sent after it (#841). Each notification carries a replay-safe
+    // event id and sequence number so a client can drop a replay (#1061).
     const progress =
-      token != null && behaviour.createProgressEmitter
-        ? scopeProgressToRequest(behaviour.createProgressEmitter(token, extra?.sendNotification))
+      token != null && behaviour.createProgressEmitter && extra?.sendNotification
+        ? scopeProgressToRequest(
+            behaviour.createProgressEmitter(
+              token,
+              sequenceProgressNotifications(extra.sendNotification),
+            ),
+          )
         : undefined;
 
     return withNewCorrelationId(async (correlationId) => {
