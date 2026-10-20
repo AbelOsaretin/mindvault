@@ -66,8 +66,12 @@ it stores. That is checked at both boundaries where a keypair can enter:
   line — and `ownsAddress: false` in its structured output — when they disagree,
   so a balance for an unsignable address never reads as spendable funds.
 
-`mindvault_import_wallet` derives the address from the secret it is given, so an
-imported wallet is consistent by construction.
+`mindvault_import_wallet` derives the address from the secret it is given and is
+**two-step** for the same reason as `mindvault_reset`: calling it without
+`confirm` shows the derived address, target profile, and network binding but
+writes nothing, so the agent can verify the address belongs to the intended
+wallet before committing. Passing `confirm: true` persists the wallet. The secret
+key never appears in any response (preview or confirmed).
 
 ## Reset confirmation guard
 
