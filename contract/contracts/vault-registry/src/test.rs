@@ -6505,8 +6505,14 @@ fn update_metadata_many_updates_owned_resources() {
     });
 
     client.update_metadata_many(&creator, &updates);
-    assert_eq!(client.get(&id_a).metadata, String::from_str(&env, "ipfs://newa"));
-    assert_eq!(client.get(&id_b).metadata, String::from_str(&env, "ipfs://newb"));
+    assert_eq!(
+        client.get(&id_a).metadata,
+        String::from_str(&env, "ipfs://newa")
+    );
+    assert_eq!(
+        client.get(&id_b).metadata,
+        String::from_str(&env, "ipfs://newb")
+    );
 }
 
 #[test]
@@ -6637,19 +6643,23 @@ fn update_metadata_many_emits_no_events_on_rejection() {
     for i in 0..all.len() {
         let (_, topics, _) = all.get(i).unwrap();
         if topics.len() >= 2 {
-            let t0: soroban_sdk::Symbol =
-                <soroban_sdk::Symbol as soroban_sdk::TryFromVal<Env, soroban_sdk::Val>>::try_from_val(
-                    &env,
-                    &topics.get(0).unwrap(),
-                )
-                .ok()
-                .unwrap();
+            let t0: soroban_sdk::Symbol = <soroban_sdk::Symbol as soroban_sdk::TryFromVal<
+                Env,
+                soroban_sdk::Val,
+            >>::try_from_val(
+                &env, &topics.get(0).unwrap()
+            )
+            .ok()
+            .unwrap();
             if t0 == soroban_sdk::symbol_short!("updmeta") {
                 has_updmeta = true;
             }
         }
     }
-    assert!(!has_updmeta, "rejected update_metadata_many must not emit updmeta");
+    assert!(
+        !has_updmeta,
+        "rejected update_metadata_many must not emit updmeta"
+    );
 }
 
 #[test]
@@ -6667,10 +6677,7 @@ fn frozen_resource_rejects_set_metadata_pointers_divergent_primary() {
     );
     let res = client.try_set_metadata_pointers(&id, &pointers, &0);
     assert_eq!(res, Err(Ok(Error::MetadataFrozen)));
-    assert_eq!(
-        client.get(&id).metadata,
-        String::from_str(&env, "ipfs://m")
-    );
+    assert_eq!(client.get(&id).metadata, String::from_str(&env, "ipfs://m"));
 }
 
 #[test]
@@ -6681,13 +6688,7 @@ fn frozen_resource_set_metadata_pointers_same_primary_is_noop() {
     client.freeze_metadata(&id);
 
     // Re-publishing mirrors with the same primary is the documented no-op.
-    let pointers = Vec::from_array(
-        &env,
-        [
-            orig.clone(),
-            String::from_str(&env, "ar://mirror"),
-        ],
-    );
+    let pointers = Vec::from_array(&env, [orig.clone(), String::from_str(&env, "ar://mirror")]);
     client.set_metadata_pointers(&id, &pointers, &0);
     assert_eq!(client.get(&id).metadata, orig);
     assert!(client.get(&id).frozen);
@@ -6752,7 +6753,7 @@ fn state_digest_client_verification_roundtrip() {
     let mut preimage = soroban_sdk::Bytes::from_slice(&env, b"mv-state-digest-v1");
     preimage.extend_from_array(&1u32.to_be_bytes()); // total
     preimage.extend_from_array(&0u32.to_be_bytes()); // start
-    // Entry: id
+                                                     // Entry: id
     let id_bytes = r.id.clone().to_val(); // placeholder; real encoding below
     let _ = id_bytes;
     let id_str = r.id.clone();
@@ -9958,26 +9959,14 @@ fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 47] {
             3,
         ),
         (DataKey::PaymentTxHash(id.clone()), "PaymentTxHash", 2),
-        (
-            DataKey::PaymentRecipient(id.clone()),
-            "PaymentRecipient",
-            2,
-        ),
+        (DataKey::PaymentRecipient(id.clone()), "PaymentRecipient", 2),
         (DataKey::RefundReceipt(id.clone()), "RefundReceipt", 2),
         (DataKey::RefundTxHash(id.clone()), "RefundTxHash", 2),
         (DataKey::RefundDeadline(id.clone()), "RefundDeadline", 2),
         (DataKey::RefundedAmount(id.clone()), "RefundedAmount", 2),
         (DataKey::RefundWindow, "RefundWindow", 1),
-        (
-            DataKey::VerifierHistory(who.clone()),
-            "VerifierHistory",
-            2,
-        ),
-        (
-            DataKey::CreatorEarnings(who.clone()),
-            "CreatorEarnings",
-            2,
-        ),
+        (DataKey::VerifierHistory(who.clone()), "VerifierHistory", 2),
+        (DataKey::CreatorEarnings(who.clone()), "CreatorEarnings", 2),
         (DataKey::FlagModerator(id.clone()), "FlagModerator", 2),
         (DataKey::Lease(id.clone(), who.clone()), "Lease", 3),
         (

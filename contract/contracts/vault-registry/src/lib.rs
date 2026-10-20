@@ -1750,7 +1750,9 @@ impl VaultRegistry {
         resource.creator.require_auth();
         Self::ensure_mutable(&resource)?;
 
-        if pointers.is_empty() || pointers.len() > MAX_METADATA_POINTERS || primary >= pointers.len()
+        if pointers.is_empty()
+            || pointers.len() > MAX_METADATA_POINTERS
+            || primary >= pointers.len()
         {
             return Err(Error::InvalidMetadataPointer);
         }
@@ -1786,8 +1788,7 @@ impl VaultRegistry {
         let key = DataKey::MetadataPointers(id.clone());
         env.storage().persistent().set(&key, &record);
         Self::bump_persistent(&env, &key);
-        env.events()
-            .publish((symbol_short!("setptrs"), id), record);
+        env.events().publish((symbol_short!("setptrs"), id), record);
         Ok(())
     }
 
@@ -1916,7 +1917,8 @@ impl VaultRegistry {
         let digest = env.crypto().sha256(&preimage).to_array();
 
         const HEX: &[u8; 16] = b"0123456789abcdef";
-        let mut out = alloc::vec::Vec::with_capacity(DEFAULT_ATTESTATION_HASH_ALGORITHM.len() + 1 + 64);
+        let mut out =
+            alloc::vec::Vec::with_capacity(DEFAULT_ATTESTATION_HASH_ALGORITHM.len() + 1 + 64);
         out.extend_from_slice(DEFAULT_ATTESTATION_HASH_ALGORITHM.as_bytes());
         out.push(b':');
         for byte in digest {
@@ -1934,14 +1936,17 @@ impl VaultRegistry {
         status: VerificationStatus,
         document_hash: BytesN<32>,
     ) -> bool {
-        let Ok(resource) = Self::validate_resource_id(&id).and_then(|_| Self::load(&env, &id)) else {
+        let Ok(resource) = Self::validate_resource_id(&id).and_then(|_| Self::load(&env, &id))
+        else {
             return false;
         };
         if resource.verified != status {
             return false;
         }
         match Self::get_attestation_hash(env.clone(), id.clone()) {
-            Some(stored) => stored == Self::compute_attestation_hash(env, id, status, document_hash),
+            Some(stored) => {
+                stored == Self::compute_attestation_hash(env, id, status, document_hash)
+            }
             None => false,
         }
     }
@@ -2085,11 +2090,11 @@ impl VaultRegistry {
         Self::ensure_mutable(&resource)?;
         let previous_owner = resource.creator.clone();
         resource.creator = pending_owner.clone();
-        
+
         // Clear dispute flag on ownership transfer - disputes are tied to the
         // previous owner's actions and should not transfer to the new owner
         resource.dispute_flag = DisputeFlag::NoFlag;
-        
+
         Self::save(&env, &mut resource);
         Self::move_creator_index(&env, &previous_owner, &pending_owner, &id, resource.listed);
 
@@ -2192,12 +2197,12 @@ impl VaultRegistry {
         Self::validate_resource_id(&id)?;
         Self::require_current_admin(&env, &admin)?;
         let mut resource = Self::load(&env, &id)?;
-        
+
         // Check if resource is already disputed to prevent re-opening
         if resource.state == ResourceState::Disputed {
             return Err(Error::InvalidLifecycleTransition);
         }
-        
+
         if !matches!(
             resource.state,
             ResourceState::Listed | ResourceState::Delisted | ResourceState::Frozen
@@ -3678,10 +3683,7 @@ impl VaultRegistry {
     /// Store the registry-wide canonical terms hash. Only the admin may call
     /// this. When a creator has not stored their own terms, `get_terms_hash`
     /// returns this value as the authoritative vault listing terms.
-    pub fn set_registry_terms_hash(
-        env: Env,
-        terms_hash: String,
-    ) -> Result<(), Error> {
+    pub fn set_registry_terms_hash(env: Env, terms_hash: String) -> Result<(), Error> {
         let admin = Self::require_admin(&env)?;
         admin.require_auth();
         Self::require_not_paused(&env)?;
@@ -4907,12 +4909,7 @@ impl VaultRegistry {
     ///   `list_page`'s `cursor`).
     /// - `limit` is capped at [`LIST_PAGE_CAP`] (20).
     /// - Returns a [`CatalogPage`] with `items` and `next_cursor`.
-    pub fn list_by_state(
-        env: Env,
-        state: ResourceState,
-        cursor: u32,
-        limit: u32,
-    ) -> CatalogPage {
+    pub fn list_by_state(env: Env, state: ResourceState, cursor: u32, limit: u32) -> CatalogPage {
         let total: u32 = env.storage().instance().get(&DataKey::Count).unwrap_or(0);
         let page_size = limit.min(LIST_PAGE_CAP);
         let mut items: Vec<Resource> = Vec::new(&env);
@@ -5805,7 +5802,11 @@ impl VaultRegistry {
         }
         // Counts are derived from the rewritten indexes so a repeated
         // transfer also repairs a historical stale count.
-        Self::set_creator_count(env, previous_owner, Self::creator_list(env, previous_owner).len());
+        Self::set_creator_count(
+            env,
+            previous_owner,
+            Self::creator_list(env, previous_owner).len(),
+        );
         Self::set_creator_count(env, new_owner, destination.len());
 
         // A listed resource changing hands is one fewer listed for the previous
