@@ -375,7 +375,7 @@ fn register_batch_contract_paused_aborts_entire_batch() {
     // Pre-register one item so the batch has something before the paused item.
     client.register(
         &creator,
-        &String::from_str(&env, "before-pause"),
+        &String::from_str(&env, "beforepause"),
         &100i128,
         &String::from_str(&env, "ipfs://m"),
         &empty_tags(&env),
@@ -2494,6 +2494,8 @@ fn expired_admin_nomination_can_be_replaced() {
     assert_eq!(client.try_nominate_new_admin(&replacement), Ok(Ok(())));
     assert_eq!(client.pending_admin(), Some(replacement.clone()));
     assert!(client.pending_admin_expiry().unwrap() > expiry);
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + ADMIN_NOMINATION_MIN_GAP);
     client.accept_admin(&replacement);
     assert_eq!(client.admin(), Some(replacement));
 }
@@ -4716,6 +4718,9 @@ fn full_workflow_emits_exactly_the_documented_events() {
     env.ledger()
         .set_sequence_number(env.ledger().sequence() + ADMIN_NOMINATION_MIN_GAP);
     client.accept_admin(&admin2);
+    record(&env, &client, &mut observed);
+
+    client.set_registry_terms_hash(&String::from_str(&env, "regterms")); // -> "setregt"
     record(&env, &client, &mut observed);
 
     // Verifier role, verification mirror, freeze, and index repair.
@@ -7549,9 +7554,10 @@ fn record_payment_emits_payment_event() {
 
     client.record_payment(&settler, &receipt_id, &id, &payer, &amount, &tx_hash);
 
-    // env.events().all() reflects the most recent invocation
+    // env.events().all() reflects the most recent invocation: `payment`
+    // followed by the `nomemo` provenance warning.
     let all = env.events().all();
-    assert_eq!(all.len(), 1, "exactly one event should be emitted");
+    assert_eq!(all.len(), 2, "payment + nomemo events should be emitted");
 
     let (_, topics, data) = all.get(0).unwrap();
     assert_eq!(
@@ -7806,7 +7812,7 @@ fn record_payment_settle_payment_anchor_end_to_end() {
     };
 
     let payment_events = env.events().all();
-    assert_eq!(payment_events.len(), 1);
+    assert_eq!(payment_events.len(), 2);
     let (payment_contract, payment_topics, payment_data) = payment_events.get(0).unwrap();
     assert_eq!(payment_contract, client.address);
     assert_eq!(payment_topics.len(), 2);
@@ -9507,8 +9513,7 @@ fn storage_key_variant(env: &Env, key: &DataKey) -> Symbol {
 /// Every `DataKey` variant, with the name and arity it must keep across
 /// upgrades. Adding a variant means adding a row here — the exhaustive match in
 /// `storage_key_migration_covers_every_variant` will not compile until you do.
-fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 37] {
-fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 31] {
+fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 48] {
     let id = String::from_str(env, "migkey");
     let who = Address::generate(env);
     [
@@ -9533,6 +9538,10 @@ fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 31] {
             "PaymentIndex",
             3,
         ),
+        (DataKey::PaymentTxHash(id.clone()), "PaymentTxHash", 2),
+        (DataKey::Paused, "Paused", 1),
+        (DataKey::PauseUntil, "PauseUntil", 1),
+        (DataKey::Settler(who.clone()), "Settler", 2),
         (
             DataKey::PurchaseReceipt(id.clone(), who.clone()),
             "PurchaseReceipt",
@@ -9543,16 +9552,17 @@ fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 31] {
             "AnchorFailure",
             3,
         ),
+        (
+            DataKey::AnchorAttempts(id.clone(), who.clone()),
+            "AnchorAttempts",
+            3,
+        ),
         (DataKey::TagIndex(id.clone()), "TagIndex", 2),
         (DataKey::FeeConfig, "FeeConfig", 1),
         (DataKey::Moderator(who.clone()), "Moderator", 2),
         (DataKey::DisputeFlag(id.clone()), "DisputeFlag", 2),
-        (DataKey::Paused, "Paused", 1),
-        (DataKey::PauseUntil, "PauseUntil", 1),
-        (DataKey::Settler(who.clone()), "Settler", 2),
         (DataKey::ListedCount, "ListedCount", 1),
         (DataKey::FlagReasonHash(id.clone()), "FlagReasonHash", 2),
-        (DataKey::PaymentTxHash(id.clone()), "PaymentTxHash", 2),
         (DataKey::AttestationHash(id.clone()), "AttestationHash", 2),
         (DataKey::PendingAdminExpiry, "PendingAdminExpiry", 1),
         (
@@ -9569,17 +9579,20 @@ fn storage_key_wire_contract(env: &Env) -> [(DataKey, &'static str, u32); 31] {
         ),
         (DataKey::MemoHash(id.clone()), "MemoHash", 2),
         (DataKey::FeeDestination, "FeeDestination", 1),
+        (DataKey::MetadataPointers(id.clone()), "MetadataPointers", 2),
+        (DataKey::FlagModerator(id.clone()), "FlagModerator", 2),
+        (DataKey::CreatorEarnings(who.clone()), "CreatorEarnings", 2),
+        (DataKey::VerifierHistory(who.clone()), "VerifierHistory", 2),
+        (DataKey::RecoveryAdmin, "RecoveryAdmin", 1),
+        (DataKey::Revision(id.clone()), "Revision", 2),
+        (DataKey::RegistryTerms, "RegistryTerms", 1),
+        (DataKey::RefundWindow, "RefundWindow", 1),
+        (DataKey::RefundDeadline(id.clone()), "RefundDeadline", 2),
+        (DataKey::PaymentRecipient(id.clone()), "PaymentRecipient", 2),
         (DataKey::RefundReceipt(id.clone()), "RefundReceipt", 2),
         (DataKey::RefundedAmount(id.clone()), "RefundedAmount", 2),
         (DataKey::RefundTxHash(id.clone()), "RefundTxHash", 2),
-        (DataKey::RefundDeadline(id.clone()), "RefundDeadline", 2),
-        (DataKey::RefundWindow, "RefundWindow", 1),
-        (DataKey::PaymentRecipient(id.clone()), "PaymentRecipient", 2),
-        (DataKey::TopTags, "TopTags", 1),
-        (DataKey::TagCount(id), "TagCount", 2),
-        (DataKey::FlagModerator(id), "FlagModerator", 2),
-        (DataKey::CreatorEarnings(who.clone()), "CreatorEarnings", 2),
-        (DataKey::VerifierHistory(who.clone()), "VerifierHistory", 2),
+        (DataKey::Lease(id.clone(), who.clone()), "Lease", 3),
     ]
 }
 
@@ -9621,8 +9634,7 @@ fn storage_key_migration_covers_every_variant() {
     let contract = storage_key_wire_contract(&env);
     assert_eq!(
         contract.len(),
-        37,
-        31,
+        48,
         "storage_key_wire_contract must list every DataKey variant"
     );
 
@@ -9641,18 +9653,19 @@ fn storage_key_migration_covers_every_variant() {
             DataKey::NetworkId => "NetworkId",
             DataKey::PaymentReceipt(_) => "PaymentReceipt",
             DataKey::PaymentIndex(_, _) => "PaymentIndex",
+            DataKey::PaymentTxHash(_) => "PaymentTxHash",
+            DataKey::Paused => "Paused",
+            DataKey::PauseUntil => "PauseUntil",
+            DataKey::Settler(_) => "Settler",
             DataKey::PurchaseReceipt(_, _) => "PurchaseReceipt",
             DataKey::AnchorFailure(_, _) => "AnchorFailure",
+            DataKey::AnchorAttempts(_, _) => "AnchorAttempts",
             DataKey::TagIndex(_) => "TagIndex",
             DataKey::FeeConfig => "FeeConfig",
             DataKey::Moderator(_) => "Moderator",
             DataKey::DisputeFlag(_) => "DisputeFlag",
-            DataKey::Paused => "Paused",
-            DataKey::PauseUntil => "PauseUntil",
-            DataKey::Settler(_) => "Settler",
             DataKey::ListedCount => "ListedCount",
             DataKey::FlagReasonHash(_) => "FlagReasonHash",
-            DataKey::PaymentTxHash(_) => "PaymentTxHash",
             DataKey::AttestationHash(_) => "AttestationHash",
             DataKey::PendingAdminExpiry => "PendingAdminExpiry",
             DataKey::PendingAdminNominatedAt => "PendingAdminNominatedAt",
@@ -9661,17 +9674,20 @@ fn storage_key_migration_covers_every_variant() {
             DataKey::CreatorListedCount(_) => "CreatorListedCount",
             DataKey::MemoHash(_) => "MemoHash",
             DataKey::FeeDestination => "FeeDestination",
-            DataKey::RefundReceipt(_) => "RefundReceipt",
-            DataKey::RefundedAmount(_) => "RefundedAmount",
-            DataKey::RefundTxHash(_) => "RefundTxHash",
-            DataKey::RefundDeadline(_) => "RefundDeadline",
-            DataKey::RefundWindow => "RefundWindow",
-            DataKey::PaymentRecipient(_) => "PaymentRecipient",
-            DataKey::TopTags => "TopTags",
-            DataKey::TagCount(_) => "TagCount",
+            DataKey::MetadataPointers(_) => "MetadataPointers",
             DataKey::FlagModerator(_) => "FlagModerator",
             DataKey::CreatorEarnings(_) => "CreatorEarnings",
             DataKey::VerifierHistory(_) => "VerifierHistory",
+            DataKey::RecoveryAdmin => "RecoveryAdmin",
+            DataKey::Revision(_) => "Revision",
+            DataKey::RegistryTerms => "RegistryTerms",
+            DataKey::RefundWindow => "RefundWindow",
+            DataKey::RefundDeadline(_) => "RefundDeadline",
+            DataKey::PaymentRecipient(_) => "PaymentRecipient",
+            DataKey::RefundReceipt(_) => "RefundReceipt",
+            DataKey::RefundedAmount(_) => "RefundedAmount",
+            DataKey::RefundTxHash(_) => "RefundTxHash",
+            DataKey::Lease(_, _) => "Lease",
         };
         assert_eq!(
             matched, *name,
@@ -11227,3 +11243,4 @@ include!("test/memo_hash.rs");
 include!("test/flag_details.rs");
 include!("test/payment_idempotency.rs");
 include!("test/stellar_wave_804_805_806_808.rs");
+include!("test/stellar_wave_970_971_975_976.rs");
