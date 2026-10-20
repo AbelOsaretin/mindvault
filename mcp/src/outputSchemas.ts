@@ -834,7 +834,9 @@ export const PROFILE_EXPORT_OUTPUT_SCHEMA = {
           network: { type: "string", enum: ["testnet", "mainnet"] },
           preferences: {
             type: "object",
-            propertyNames: { pattern: "^(?!.*(secret|private|seed|credential|apikey|token|password)).*$" },
+            propertyNames: {
+              pattern: "^(?!.*(secret|private|seed|credential|apikey|token|password)).*$",
+            },
             additionalProperties: { type: ["string", "number", "boolean", "null"] },
           },
         },
@@ -849,4 +851,51 @@ export const PROFILE_IMPORT_OUTPUT_SCHEMA = {
   type: "object",
   properties: { imported: { type: "array", items: { type: "string" } } },
   required: ["imported"],
+} as const;
+
+export const METADATA_DIFF_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    resourceId: { type: "string" },
+    apiFound: { type: "boolean" },
+    onchainFound: { type: "boolean" },
+    onchainError: { type: ["string", "null"] },
+    fields: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          field: { type: "string" },
+          status: {
+            type: "string",
+            enum: ["match", "mismatch", "missing_api", "missing_onchain"],
+          },
+          api: {},
+          onchain: {},
+        },
+        required: ["field", "status", "api", "onchain"],
+      },
+    },
+    discrepancyCount: { type: "integer" },
+    summary: { type: "string" },
+    apiSource: { type: "string" },
+    onchainSource: { type: "string" },
+    network: { type: "string" },
+    x402Network: { type: "string" },
+    rpc: { type: "string" },
+  },
+  required: [
+    "resourceId",
+    "apiFound",
+    "onchainFound",
+    "onchainError",
+    "fields",
+    "discrepancyCount",
+    "summary",
+    "apiSource",
+    "onchainSource",
+    "network",
+    "x402Network",
+    "rpc",
+  ],
 } as const;

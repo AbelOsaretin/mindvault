@@ -180,7 +180,11 @@ import {
   type TransactionLookup,
 } from "./settlement.js";
 import { publisherTerms } from "./tools/state.js";
-import { batchCatalogLookupOutcome, previewMetadataHashOutcome } from "./tools/registry.js";
+import {
+  batchCatalogLookupOutcome,
+  metadataDiff,
+  previewMetadataHashOutcome,
+} from "./tools/registry.js";
 import { mockVerifyAttestation } from "./mock.js";
 import { formatResetPreview, isResetConfirmed, type ResetScope } from "./resetGuard.js";
 import { verifyInstall, formatVerifyInstall } from "./verifyInstall.js";
@@ -4134,6 +4138,8 @@ async function dispatchToolOutcome(
           requiredString(args, "resourceId"),
           optionalString(args, "expectedMetadataHash"),
         );
+      case "mindvault_metadata_diff":
+        return metadataDiff(requiredString(args, "resourceId"));
       case "mindvault_verify_attestation":
         return verifyAttestation(
           requiredString(args, "resourceId"),

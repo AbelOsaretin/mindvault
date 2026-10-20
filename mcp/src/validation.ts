@@ -355,6 +355,9 @@ export const TOOL_ARGUMENT_SPECS: Record<string, ToolArgumentSpec> = {
     resourceId: RESOURCE_ID,
     expectedMetadataHash: { kind: "hash" },
   },
+  mindvault_metadata_diff: {
+    resourceId: RESOURCE_ID,
+  },
   mindvault_verify_attestation: {
     resourceId: ON_CHAIN_RESOURCE_ID,
     attestationHash: ATTESTATION_HASH,
