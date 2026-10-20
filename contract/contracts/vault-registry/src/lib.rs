@@ -21,6 +21,19 @@ use soroban_sdk::{
 // write so an actively-managed resource is never archived out from under us.
 const DAY_IN_LEDGERS: u32 = 17280;
 const ADMIN_NOMINATION_DURATION: u32 = 7 * DAY_IN_LEDGERS;
+/// Minimum ledgers between `nominate_new_admin` and `accept_admin`.
+pub const ADMIN_NOMINATION_MIN_GAP: u32 = DAY_IN_LEDGERS;
+/// Maximum rejected anchor attempts per `(resource_id, buyer)` pair.
+pub const MAX_ANCHOR_ATTEMPTS: u32 = 5;
+/// Ledgers a pair must wait after a rejected anchor attempt before retrying.
+pub const ANCHOR_RETRY_BACKOFF_LEDGERS: u32 = 300;
+/// Lease window lengths in ledgers and their USDC price multipliers.
+pub const LEASE_HOUR_LEDGERS: u32 = 720;
+pub const LEASE_DAY_LEDGERS: u32 = 17_280;
+pub const LEASE_WEEK_LEDGERS: u32 = 120_960;
+pub const LEASE_HOUR_MULTIPLIER: i128 = 1;
+pub const LEASE_DAY_MULTIPLIER: i128 = 3;
+pub const LEASE_WEEK_MULTIPLIER: i128 = 7;
 /// Default creator refund window, matching the ADR's example dispute window.
 pub const DEFAULT_REFUND_WINDOW_LEDGERS: u32 = DAY_IN_LEDGERS;
 /// Maximum refund window leaves one day of TTL beyond the 30-day storage bump.
@@ -37,6 +50,15 @@ pub const MAX_METADATA_POINTERS: u32 = 4;
 /// `compute_attestation_hash`, so the digest can never collide with a hash
 /// computed for another purpose over the same bytes.
 pub const ATTESTATION_HASH_DOMAIN: &str = "mindvault-attestation-v1";
+
+/// Encoding version stamped into every [`StateDigestPage`]. Bump whenever the
+/// digest preimage layout changes so indexers can refuse to compare hashes
+/// across incompatible encodings.
+pub const STATE_DIGEST_ENCODING_VERSION: u32 = 1;
+/// Domain separator prefixing the state-digest preimage.
+pub const STATE_DIGEST_DOMAIN: &str = "mv-state-digest-v1";
+/// Maximum number of entries covered by one `state_digest` call.
+pub const MAX_DIGEST_PAGE: u32 = 20;
 pub const MAX_CONTENT_HASH_LEN: u32 = 128;
 pub const DEFAULT_ATTESTATION_HASH_ALGORITHM: &str = "sha256";
 pub const MAX_ATTESTATION_HASH_ALGORITHM_LEN: u32 = 16;
@@ -72,6 +94,9 @@ pub const TOP_TAGS_CAP: u32 = 20;
 pub const MAX_BATCH_REGISTER: u32 = 10;
 /// Maximum number of prices that can be updated in one `set_price_many` call.
 pub const MAX_BATCH_PRICE_UPDATES: u32 = 10;
+/// Maximum number of metadata pointers that can be updated in one
+/// `update_metadata_many` call.
+pub const MAX_BATCH_METADATA_UPDATES: u32 = 10;
 /// Maximum number of lifecycle states returned by `get_resource_states`.
 pub const MAX_BATCH_RESOURCE_STATES: u32 = 20;
 
@@ -139,6 +164,7 @@ pub const METHOD_SCHEMA: &[(&str, &str)] = &[
     ("set_price", "creator"),
     ("set_price_many", "creator"),
     ("update_metadata", "creator"),
+    ("update_metadata_many", "creator"),
     ("freeze_metadata", "creator"),
     ("set_metadata_pointers", "creator"),
     ("get_metadata_pointers", "—"),
@@ -168,6 +194,7 @@ pub const METHOD_SCHEMA: &[(&str, &str)] = &[
     ("get_owner_many", "—"),
     ("count", "—"),
     ("listed_count", "—"),
+    ("state_digest", "—"),
     ("creator_resource_count", "—"),
     ("creator_listed_count", "—"),
     // ── Paginated catalog ─────────────────────────────────────────────────
@@ -347,10 +374,6 @@ pub const ERROR_SCHEMA: &[(u32, &str, &str)] = &[
     (48, "DuplicateTxHash", "A payment or refund receipt already uses the supplied transaction hash (`tx_hash`)."),
     (49, "FeeConfigNotSet", "`set_fee_recipient` or `set_fee_destination` was called before any fee config was set via `set_fee_config`."),
     (50, "AdminNominationExpired", "The pending admin nomination is missing or has expired."),
-    (51, "InvalidMetadataPointers", "`set_metadata_pointers` received an empty, oversized (> `MAX_METADATA_POINTERS`), or duplicate pointer list, or an out-of-range `primary` index."),
-    (52, "AdminAlreadySet", "`bootstrap_dual_admin` was called after an admin was already set."),
-    (53, "RecoveryAdminNotSet", "`recover_admin` was called but no recovery admin is configured."),
-    (54, "UnsupportedResourceSchema", "A resource uses a schema version this deployment cannot safely read or upgrade."),
 ];
 
 /// Canonical list of every event topic this contract emits, paired with a
@@ -387,7 +410,6 @@ pub const EVENT_SCHEMA: &[(&str, &str)] = &[
         "EmergencyDelistEvent { id, admin, reason }",
     ),
     ("setterms", "terms_hash: String"),
-    ("setregt", "terms_hash: String"),
     ("setadmin", "new_admin: Address"),
     ("setrecov", "recovery_admin: Option<Address>"),
     ("recover", "(old_admin: Address, new_admin: Address)"),
@@ -429,9 +451,6 @@ pub const EVENT_SCHEMA: &[(&str, &str)] = &[
     ("flag", "FlagEvent { id, moderator, reason }"),
     ("unflag", "resource id"),
     ("flagrsn", "(moderator: Address, reason_hash: String)"),
-    ("flagwin", "window_ledgers: u32"),
-    ("flagfrc", "(admin: Address, deadline: u32)"),
-    ("nomemo", "(receipt_id: String, tx_hash: String)"),
     ("retagidx", "new_count: u32"),
     ("reactive", "resource id"),
     (
@@ -447,6 +466,10 @@ pub const EVENT_SCHEMA: &[(&str, &str)] = &[
         "txfrterms",
         "TransferWithTermsEvent { id, previous_owner, new_owner, terms_hash, attestation_reset }",
     ),
+    ("anchrxhst", "(resource_id: String, buyer: Address, attempts: AnchorAttempts)"),
+    ("lease", "(resource_id: String, lease: Lease)"),
+    ("leasesetl", "(resource_id: String, lease: Lease)"),
+    ("leaserevk", "(resource_id: String, lease: Lease)"),
 ];
 
 /// Registry discovery metadata returned by [`VaultRegistry::registry_info`].
@@ -657,6 +680,14 @@ pub struct BatchPriceUpdate {
     pub new_price: i128,
 }
 
+/// Input for one item in a batch metadata-pointer update.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct BatchMetadataUpdate {
+    pub id: String,
+    pub metadata: String,
+}
+
 /// Result of a batch registration attempt. Contains successfully registered
 /// resource IDs and any errors encountered (with their indices).
 #[contracttype]
@@ -694,6 +725,28 @@ pub struct RegisterEvent {
 pub struct CatalogPage {
     pub items: Vec<Resource>,
     pub next_cursor: Option<u32>,
+}
+
+/// One page of a deterministic registry-state digest for off-chain indexer
+/// reconciliation.
+///
+/// `page_hash` is `sha256` over the versioned preimage described on
+/// [`VaultRegistry::state_digest`]. Two indexers that hold the same registry
+/// state over the same window will always compute the same `page_hash`;
+/// comparing page hashes locates the first window that drifted.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StateDigestPage {
+    /// Digest encoding version ([`STATE_DIGEST_ENCODING_VERSION`]).
+    pub encoding_version: u32,
+    /// Total number of registered resources when the page was computed.
+    pub total: u32,
+    /// Index of the first entry covered by this page.
+    pub start: u32,
+    /// Cursor to pass as `start` on the next call, or `None` at end-of-list.
+    pub next_cursor: Option<u32>,
+    /// `sha256` digest of this page's entries under the versioned encoding.
+    pub page_hash: BytesN<32>,
 }
 
 /// Cursor passed to and returned by the id-indexed listings
@@ -813,6 +866,31 @@ pub enum DataKey {
     /// `receipt_id` recorded for it, guaranteeing one payment receipt per
     /// Stellar tx (`DuplicateTxHash` on reuse).
     PaymentTxHash(String),
+    /// Address that originally funded a payment receipt, preserved across
+    /// settlement so refunds can be routed back without re-deriving it.
+    PaymentRecipient(String),
+    /// Canonical refund receipt, keyed by its caller-assigned `refund_id`.
+    RefundReceipt(String),
+    /// Secondary index mapping a refund transaction hash to its `refund_id`.
+    RefundTxHash(String),
+    /// Ledger sequence at which a refund window closes for a payment receipt.
+    RefundDeadline(String),
+    /// Cumulative USDC refunded against a payment receipt.
+    RefundedAmount(String),
+    /// Configured creator-refund window length, in ledgers.
+    RefundWindow,
+    /// Ordered history of verification status changes for a verifier address.
+    VerifierHistory(Address),
+    /// Aggregated settled-payment earnings for a creator wallet address.
+    CreatorEarnings(Address),
+    /// Moderator who last set a resource's dispute flag or reason hash.
+    FlagModerator(String),
+    /// Active lease held by `holder` on a resource.
+    Lease(String, Address),
+    /// Anchor attempt counter for `(resource_id, buyer)`.
+    AnchorAttempts(String, Address),
+    /// Registry-level listing terms hash (fallback for `get_terms_hash`).
+    RegistryTerms,
     /// Emergency pause flag. When `true`, every state-changing method
     /// returns `ContractPaused`.
     Paused,
@@ -889,18 +967,6 @@ pub struct RoleChange {
 pub struct MetadataPointers {
     pub pointers: Vec<String>,
     pub primary: u32,
-    /// Moderator who last called `flag_resource`, `unflag_resource`, or
-    /// `set_flag_reason_hash` for a resource. Read back by `flag_details`.
-    FlagModerator(String),
-    /// Aggregated settled-payment earnings for a creator wallet address.
-    /// Written by `settle_payment` and read by `creator_earnings_estimate`.
-    /// Value type: `(i128, u32)` tuple — (total USDC stroops of all settled
-    /// receipts for resources owned by this creator at settlement time, count).
-    CreatorEarnings(Address),
-    /// Ordered history of verification status changes for a verifier address.
-    /// Written by `set_verification_status`; read by `get_verifier_status_history`.
-    /// Value type: `Vec<VerifierStatusEntry>`.
-    VerifierHistory(Address),
 }
 
 /// Event data emitted when a resource's metadata pointer is updated.
@@ -1078,6 +1144,12 @@ pub enum AnchorFailureReason {
     /// without re-running the data checks and without writing storage; only
     /// `attempt_anchor_purchase_receipt` produces it.
     AttemptsExhausted = 4,
+    /// No verifier is currently registered to anchor the receipt.
+    VerifierUnavailable = 5,
+    /// No payment receipt is recorded for `(resource_id, buyer)`.
+    NoPaymentRecorded = 6,
+    /// The supplied receipt hash does not match the recorded payment receipt.
+    ReceiptHashMismatch = 7,
 }
 
 impl AnchorFailureReason {
@@ -1093,6 +1165,9 @@ impl AnchorFailureReason {
             AnchorFailureReason::RetryTooSoon | AnchorFailureReason::AttemptsExhausted => {
                 Error::InvalidPaymentTransition
             }
+            AnchorFailureReason::VerifierUnavailable => Error::AdminNotSet,
+            AnchorFailureReason::NoPaymentRecorded => Error::NotFound,
+            AnchorFailureReason::ReceiptHashMismatch => Error::InvalidTxHash,
         }
     }
 }
@@ -1248,15 +1323,6 @@ pub enum Error {
     /// soon after `nominate_new_admin` (before `ADMIN_NOMINATION_MIN_GAP`
     /// ledgers have elapsed).
     AdminNominationExpired = 50,
-    /// `set_metadata_pointers` received zero, more than `MAX_METADATA_POINTERS`,
-    /// or duplicate pointers, or a `primary` index out of range.
-    InvalidMetadataPointers = 51,
-    /// `bootstrap_dual_admin` was called after an admin was already set.
-    AdminAlreadySet = 52,
-    /// `recover_admin` was called but no recovery admin is configured.
-    RecoveryAdminNotSet = 53,
-    /// A resource was written by a schema version this contract cannot migrate.
-    UnsupportedResourceSchema = 54,
 }
 
 #[contract]
@@ -1346,6 +1412,10 @@ impl VaultRegistry {
     /// resource is validated independently. Common failure causes include
     /// duplicate IDs, invalid prices, or invalid metadata pointers.
     ///
+    /// A batch that repeats any id is rejected up front with
+    /// `AlreadyRegistered` and leaves resource records, counters, indexes, and
+    /// events unchanged — see the within-batch duplicate guard below.
+    ///
     /// Use case: Bulk onboarding of resources by publishers or automated systems.
     pub fn register_batch(
         env: Env,
@@ -1357,6 +1427,22 @@ impl VaultRegistry {
 
         if items.len() > MAX_BATCH_REGISTER {
             return Err(Error::BatchTooLarge);
+        }
+
+        // Reject the whole batch before any write when the input itself
+        // repeats an id. Without this guard the first occurrence would be
+        // persisted and the second recorded as a per-item `AlreadyRegistered`
+        // failure — a partial effect that misreports success for a call the
+        // caller cannot safely retry. `AlreadyRegistered` is the stable error
+        // for "this id is taken", which is exactly what a within-batch
+        // duplicate means from the caller's point of view.
+        for i in 0..items.len() {
+            let id_i = items.get_unchecked(i).id.clone();
+            for j in (i + 1)..items.len() {
+                if items.get_unchecked(j).id == id_i {
+                    return Err(Error::AlreadyRegistered);
+                }
+            }
         }
 
         let mut succeeded: Vec<String> = Vec::new(&env);
@@ -1507,6 +1593,76 @@ impl VaultRegistry {
         Ok(())
     }
 
+    /// Update the metadata pointer for a small bounded set of owned resources
+    /// in one transaction. The batch is capped at
+    /// [`MAX_BATCH_METADATA_UPDATES`] items.
+    ///
+    /// Failure behavior is **atomic**: every item is validated (id format,
+    /// ownership, metadata-freeze / content-hash rules, pointer validity)
+    /// before any write. If any item fails validation the whole call errors
+    /// and no resource records, pointers, or events change. When every item
+    /// passes, each resource is written and emits its own `updmeta` event —
+    /// the per-item results an indexer needs — under a single creator
+    /// authorization.
+    ///
+    /// Freeze invariant: a frozen resource (`freeze_metadata`, or registered
+    /// with a content hash) rejects any divergent pointer with
+    /// `MetadataFrozen`, exactly as `update_metadata` does. No-op items whose
+    /// pointer is unchanged are skipped silently.
+    pub fn update_metadata_many(
+        env: Env,
+        creator: Address,
+        updates: Vec<BatchMetadataUpdate>,
+    ) -> Result<(), Error> {
+        creator.require_auth();
+        Self::require_not_paused(&env)?;
+        if updates.len() > MAX_BATCH_METADATA_UPDATES {
+            return Err(Error::BatchTooLarge);
+        }
+
+        // Validate everything first so a failure leaves zero writes behind.
+        let mut pending: alloc::vec::Vec<(String, Resource, String)> = alloc::vec::Vec::new();
+        for i in 0..updates.len() {
+            let item = updates.get_unchecked(i);
+            Self::validate_resource_id(&item.id)?;
+            let resource = Self::load(&env, &item.id)?;
+            if resource.creator != creator {
+                return Err(Error::Unauthorized);
+            }
+            Self::ensure_mutable(&resource)?;
+            if resource.frozen || resource.content_hash.is_some() {
+                if resource.metadata != item.metadata {
+                    return Err(Error::MetadataFrozen);
+                }
+                continue;
+            }
+            if resource.metadata == item.metadata {
+                continue;
+            }
+            Self::validate_metadata_pointer(&item.metadata)?;
+            pending.push((item.id.clone(), resource, item.metadata.clone()));
+        }
+
+        for (id, mut resource, metadata) in pending {
+            let old_metadata = resource.metadata.clone();
+            resource.metadata = metadata.clone();
+            Self::save(&env, &mut resource);
+            env.storage()
+                .persistent()
+                .remove(&DataKey::MetadataPointers(id.clone()));
+            env.events().publish(
+                (symbol_short!("updmeta"), id.clone()),
+                MetadataUpdateEvent {
+                    id,
+                    old_metadata,
+                    new_metadata: metadata,
+                },
+            );
+        }
+
+        Ok(())
+    }
+
     /// Update a resource's metadata pointer. Only the creator may call this.
     ///
     /// Emits a [`MetadataUpdateEvent`] containing the resource id, the previous
@@ -1596,14 +1752,14 @@ impl VaultRegistry {
 
         if pointers.is_empty() || pointers.len() > MAX_METADATA_POINTERS || primary >= pointers.len()
         {
-            return Err(Error::InvalidMetadataPointers);
+            return Err(Error::InvalidMetadataPointer);
         }
         for i in 0..pointers.len() {
             let pointer = pointers.get_unchecked(i);
             Self::validate_metadata_pointer(&pointer)?;
             for j in (i + 1)..pointers.len() {
                 if pointers.get_unchecked(j) == pointer {
-                    return Err(Error::InvalidMetadataPointers);
+                    return Err(Error::InvalidMetadataPointer);
                 }
             }
         }
@@ -2787,6 +2943,93 @@ impl VaultRegistry {
             .unwrap_or(0)
     }
 
+    /// Paginated, deterministic digest of registry entries for off-chain
+    /// indexer reconciliation. Walks the catalog insertion index exactly like
+    /// `list_page`, covering `min(limit, MAX_DIGEST_PAGE)` entries starting at
+    /// `start`, and returns a versioned [`StateDigestPage`].
+    ///
+    /// `page_hash` is `sha256` over this preimage (encoding version 1):
+    ///
+    /// ```text
+    /// STATE_DIGEST_DOMAIN
+    ///   || u32_be(total) || u32_be(start)
+    ///   || for each entry in the window, in index order:
+    ///        u32_be(len(id))       || id
+    ///        || i128_be(price)
+    ///        || u32_be(len(metadata)) || metadata
+    ///        || u32_be(state as u32) || u8(frozen as u8)
+    ///        || u32_be(version)    || u32_be(updated_at)
+    ///        || u8(has_content_hash)
+    ///        || (if has_content_hash: u32_be(len(hash)) || hash)
+    /// ```
+    ///
+    /// The encoding is deterministic for the same registry state and bounded
+    /// per call. A client verifies a page by reconstructing this preimage from
+    /// `get`/`list_page` output and comparing `sha256(preimage)` to
+    /// `page_hash`; see `state_digest_client_verification_roundtrip` in the
+    /// contract tests for a worked example.
+    pub fn state_digest(env: Env, start: u32, limit: u32) -> StateDigestPage {
+        let total: u32 = env.storage().instance().get(&DataKey::Count).unwrap_or(0);
+        let page_size = limit.min(MAX_DIGEST_PAGE);
+        let mut preimage = Bytes::from_slice(&env, STATE_DIGEST_DOMAIN.as_bytes());
+        preimage.extend_from_array(&total.to_be_bytes());
+        preimage.extend_from_array(&start.to_be_bytes());
+
+        let mut i = start;
+        let mut n = 0u32;
+        while i < total && n < page_size {
+            if let Some(id) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, String>(&DataKey::Index(i))
+            {
+                if let Some(resource) = env
+                    .storage()
+                    .persistent()
+                    .get::<DataKey, Resource>(&DataKey::Resource(id))
+                {
+                    Self::append_digest_entry(&mut preimage, &resource);
+                    n += 1;
+                }
+            }
+            i += 1;
+        }
+
+        let page_hash = BytesN::from_array(&env, &env.crypto().sha256(&preimage).to_array());
+        StateDigestPage {
+            encoding_version: STATE_DIGEST_ENCODING_VERSION,
+            total,
+            start,
+            next_cursor: if i < total { Some(i) } else { None },
+            page_hash,
+        }
+    }
+
+    fn append_digest_entry(preimage: &mut Bytes, resource: &Resource) {
+        let id_bytes = Self::string_bytes(&resource.id);
+        preimage.extend_from_array(&(id_bytes.len() as u32).to_be_bytes());
+        preimage.extend_from_slice(&id_bytes);
+        preimage.extend_from_array(&resource.price.to_be_bytes());
+        let meta_bytes = Self::string_bytes(&resource.metadata);
+        preimage.extend_from_array(&(meta_bytes.len() as u32).to_be_bytes());
+        preimage.extend_from_slice(&meta_bytes);
+        preimage.extend_from_array(&(resource.state as u32).to_be_bytes());
+        preimage.extend_from_array(&[resource.frozen as u8]);
+        preimage.extend_from_array(&resource.version.to_be_bytes());
+        preimage.extend_from_array(&resource.updated_at.to_be_bytes());
+        match &resource.content_hash {
+            Some(hash) => {
+                preimage.extend_from_array(&[1u8]);
+                let hash_bytes = Self::string_bytes(hash);
+                preimage.extend_from_array(&(hash_bytes.len() as u32).to_be_bytes());
+                preimage.extend_from_slice(&hash_bytes);
+            }
+            None => {
+                preimage.extend_from_array(&[0u8]);
+            }
+        }
+    }
+
     /// Store the intended network identifier once. The supplied ID must match
     /// the ledger this contract is executing on, preventing a deployment
     /// script from accidentally recording a different Stellar network.
@@ -2990,7 +3233,7 @@ impl VaultRegistry {
     /// `recovery_admin` in one call, so the deployment can recover via
     /// `recover_admin` if the sole admin key is lost. Both addresses must
     /// authorize and must differ (`SameAdmin`). Only valid before any admin is
-    /// set (`AdminAlreadySet`); `nominate_new_admin` remains the single-key
+    /// set (`AlreadyRegistered`); `nominate_new_admin` remains the single-key
     /// bootstrap path. Emits `setadmin` and `setrecov`.
     pub fn bootstrap_dual_admin(
         env: Env,
@@ -2998,7 +3241,7 @@ impl VaultRegistry {
         recovery_admin: Address,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AdminAlreadySet);
+            return Err(Error::AlreadyRegistered);
         }
         if admin == recovery_admin {
             return Err(Error::SameAdmin);
@@ -3044,13 +3287,13 @@ impl VaultRegistry {
     /// Replace a lost admin key. Only the recovery admin may call this.
     /// Sets `new_admin` as admin immediately and clears any pending admin
     /// nomination. The recovery admin itself is unchanged. Errors
-    /// `RecoveryAdminNotSet`, `AdminNotSet`, or `SameAdmin`. Emits `recover`.
+    /// `AdminNotSet`, `AdminNotSet`, or `SameAdmin`. Emits `recover`.
     pub fn recover_admin(env: Env, new_admin: Address) -> Result<(), Error> {
         let recovery: Address = env
             .storage()
             .instance()
             .get(&DataKey::RecoveryAdmin)
-            .ok_or(Error::RecoveryAdminNotSet)?;
+            .ok_or(Error::AdminNotSet)?;
         recovery.require_auth();
         let old_admin = Self::require_admin(&env)?;
         if new_admin == old_admin || new_admin == recovery {
@@ -3439,7 +3682,8 @@ impl VaultRegistry {
         env: Env,
         terms_hash: String,
     ) -> Result<(), Error> {
-        Self::require_current_admin(&env)?.require_auth();
+        let admin = Self::require_admin(&env)?;
+        admin.require_auth();
         Self::require_not_paused(&env)?;
         Self::validate_bounded_string(
             &terms_hash,
@@ -3575,33 +3819,6 @@ impl VaultRegistry {
             &resource_id,
             &payer,
             amount,
-            state: PaymentState::Escrowed,
-            tx_hash,
-            recorded_at: env.ledger().sequence(),
-            ledger: env.ledger().sequence(),
-        };
-
-        env.storage().persistent().set(&receipt_key, &receipt);
-        Self::bump_persistent(&env, &receipt_key);
-
-        let recipient_key = DataKey::PaymentRecipient(receipt_id.clone());
-        env.storage()
-            .persistent()
-            .set(&recipient_key, &resource.creator);
-        Self::bump_persistent(&env, &recipient_key);
-
-        // Secondary indexes: `(resource_id, payer)` -> most recent receipt id
-        // (for `get_payment_receipt`), and `tx_hash` -> receipt id (enforces
-        // one receipt per Stellar settlement transaction).
-        let index_key = DataKey::PaymentIndex(resource_id, payer);
-        env.storage().persistent().set(&index_key, &receipt_id);
-        Self::bump_persistent(&env, &index_key);
-
-        env.storage().persistent().set(&tx_hash_key, &receipt_id);
-        Self::bump_persistent(&env, &tx_hash_key);
-
-        env.events()
-            .publish((symbol_short!("payment"), receipt_id), receipt);
             &tx_hash,
         )?;
         Self::write_payment(&env, receipt_id, resource_id, payer, amount, tx_hash)?;
@@ -3684,6 +3901,21 @@ impl VaultRegistry {
         receipt.state = PaymentState::Settled;
         env.storage().persistent().set(&receipt_key, &receipt);
         Self::bump_persistent(&env, &receipt_key);
+
+        // Accumulate creator earnings so `creator_earnings_estimate` can
+        // report totals without scanning receipt history.
+        if let Ok(resource) = Self::load(&env, &receipt.resource_id) {
+            let earnings_key = DataKey::CreatorEarnings(resource.creator.clone());
+            let (total, count): (i128, u32) = env
+                .storage()
+                .persistent()
+                .get(&earnings_key)
+                .unwrap_or((0i128, 0u32));
+            env.storage()
+                .persistent()
+                .set(&earnings_key, &(total + receipt.amount, count + 1));
+            Self::bump_persistent(&env, &earnings_key);
+        }
 
         let deadline = env
             .ledger()
@@ -5270,9 +5502,9 @@ impl VaultRegistry {
         resource: &mut Resource,
         next: ResourceState,
     ) -> Result<(), Error> {
-        // Check if resource is tombstoned first - tombstoned resources have no outgoing transitions
+        // Tombstoned resources have no outgoing lifecycle transitions.
         if resource.state == ResourceState::Tombstoned {
-            return Err(Error::ResourceTombstoned);
+            return Err(Error::InvalidLifecycleTransition);
         }
         let allowed = matches!(
             (resource.state, next),
@@ -5353,7 +5585,7 @@ impl VaultRegistry {
         {
             Ok(())
         } else {
-            Err(Error::UnsupportedResourceSchema)
+            Err(Error::InvalidResourceId)
         }
     }
 
