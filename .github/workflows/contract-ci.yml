@@ -74,18 +74,17 @@ jobs:
         working-directory: contract
         run: |
           WASM_FILE="target/wasm32v1-none/release/vault_registry.wasm"
-          # 112 KB. Raised from 96 KB when time-limited access leases (eight
-          # methods, three types), the anchor attempt cap and back-off, and
-          # the cursor-based *_page listings landed: the optimized WASM went
-          # from ~91 KB to ~107 KB, almost all of it contract spec entries and
-          # the XDR conversions generated for the new types. The 96 KB figure
-          # had itself been raised from 36 KB, which was set against a snapshot
-          # from before the lifecycle state machine, moderator role and dispute
-          # flags, fee config, tag index and its repair, network guard, payment
-          # receipts and the settler role, purchase receipt anchoring, and the
-          # emergency pause all merged. The release profile already uses
-          # opt-level "z", LTO, one codegen unit and stripped symbols.
-          MAX_SIZE=114688
+          # 148 KB. Raised from 112 KB once merge corruption on main was
+          # repaired and the registry grew a listing revision counter, a
+          # tag-index integrity report, and the lease/anchor/refund keys the
+          # garbled merge had dropped: the optimized WASM went to ~138 KB,
+          # almost all of it contract spec entries and the XDR conversions
+          # for the restored types. The 112 KB figure had itself been raised
+          # from 96 KB when time-limited access leases, the anchor attempt
+          # cap and back-off, and the cursor-based *_page listings landed.
+          # The release profile already uses opt-level "z", LTO, one codegen
+          # unit and stripped symbols.
+          MAX_SIZE=151552
           SIZE=$(stat -c%s "$WASM_FILE")
           echo "WASM Size: $SIZE bytes"
           if [ "$SIZE" -gt "$MAX_SIZE" ]; then
