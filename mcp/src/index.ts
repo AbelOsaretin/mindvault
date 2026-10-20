@@ -170,6 +170,7 @@ import {
   type TimeoutService,
 } from "./httpTimeout.js";
 import { resolveToolTimeouts, timeoutForTool } from "./toolTimeoutOverrides.js";
+import { describeProxyConfig, resolveProxyConfig, withProxy } from "./proxy.js";
 import {
   describeRetryPolicy,
   formatRetryLog,
@@ -286,9 +287,10 @@ export function _setMockMode(on: boolean): void {
   if (on) process.env.MINDVAULT_MOCK = "1";
   else delete process.env.MINDVAULT_MOCK;
 }
+const PROXY_CONFIG = resolveProxyConfig(process.env);
 const httpFetch: typeof fetch = MOCK
   ? createMockFetch(() => currentWallet()?.publicKey)
-  : (input, init) => fetch(input as RequestInfo | URL, init);
+  : withProxy((input, init) => fetch(input as RequestInfo | URL, init), PROXY_CONFIG);
 
 const TIMEOUTS = resolveTimeouts(process.env);
 const TOOL_TIMEOUTS = resolveToolTimeouts(process.env).overrides;
@@ -316,7 +318,10 @@ function httpRetryOptions(label: string) {
 function sorobanRpcFetch(init: RequestInit, label: string): Promise<Response> {
   const initWithUA: RequestInit = {
     ...init,
-    headers: { "User-Agent": USER_AGENT, ...correlationHeaders(init.headers as Record<string, string> | undefined) },
+    headers: {
+      "User-Agent": USER_AGENT,
+      ...correlationHeaders(init.headers as Record<string, string> | undefined),
+    },
   };
   return withRetry(
     () => fetchWithTimeout(httpFetch, SOROBAN_RPC_URL, initWithUA, "soroban", TIMEOUTS.soroban),
@@ -541,7 +546,10 @@ async function checkDependency(
 ): Promise<DependencyStatus> {
   const initWithUA: RequestInit = {
     ...init,
-    headers: { "User-Agent": USER_AGENT, ...correlationHeaders(init?.headers as Record<string, string> | undefined) },
+    headers: {
+      "User-Agent": USER_AGENT,
+      ...correlationHeaders(init?.headers as Record<string, string> | undefined),
+    },
   };
   try {
     const res = await withRetry(
@@ -2085,18 +2093,13 @@ async function publish(args: {
         const bal = await getBalanceDetails(wallet.publicKey);
         live.usdcBalance = bal.usdcBalance;
       } catch (err) {
-        live.readError = live.readError ? `${live.readError}; ${safeErrorMessage(err)}` : safeErrorMessage(err);
+        live.readError = live.readError
+          ? `${live.readError}; ${safeErrorMessage(err)}`
+          : safeErrorMessage(err);
       }
     }
     return JSON.stringify(
-      dryRunPublish(
-        args,
-        NETWORK,
-        BASE_URL,
-        !!wallet,
-        !!currentApiKey(),
-        live,
-      ),
+      dryRunPublish(args, NETWORK, BASE_URL, !!wallet, !!currentApiKey(), live),
       null,
       2,
     );
@@ -3622,6 +3625,7 @@ export function networkProfile(): string {
     usdcContractId,
     timeouts: describeTimeouts(TIMEOUTS),
     retries: describeRetryPolicy(RETRY_POLICY),
+    proxy: describeProxyConfig(PROXY_CONFIG),
     warnings,
   };
 
