@@ -1553,7 +1553,7 @@ const DEFINED_TOOLS: ToolDefinition[] = [
   {
     name: "mindvault_import_wallet",
     description:
-      "Import an existing Stellar wallet by providing a secret key (or reading MINDVAULT_AGENT_SECRET from the environment). Validates the key, optionally persists it to the active profile (or a named profile), and never logs the secret. Use this to restore a wallet from backup or connect to an existing identity.",
+      "Import an existing Stellar wallet by providing a secret key (or reading MINDVAULT_AGENT_SECRET from the environment). Two-step: the first call (without confirm) derives the public address and displays it with the target profile and network binding, but writes nothing. Pass confirm: true to save. The secret key is never returned in any response. Use this to restore a wallet from backup or connect to an existing identity.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1568,11 +1568,11 @@ const DEFINED_TOOLS: ToolDefinition[] = [
           description: "Optional profile name to import into. Defaults to the active profile.",
           examples: ["testnet", "mainnet-publisher"],
         },
-        persist: {
+        confirm: {
           type: "boolean",
           description:
-            "When true (default), save the imported wallet to the state file. When false, validate only and return the public key without writing to disk.",
-          examples: [true, false],
+            "Must be true to persist the wallet. Without it the tool derives and displays the address but writes nothing, so the agent can verify the address before committing.",
+          examples: [true],
         },
         confirmMainnet: {
           type: "boolean",

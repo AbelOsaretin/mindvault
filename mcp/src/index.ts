@@ -728,13 +728,19 @@ async function assertApiReachableFor(toolName: string): Promise<void> {
   });
 }
 
+/** Whether an importWallet call carries explicit confirmation (same vocabulary as the reset guard). */
+function isImportConfirmed(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value !== "string") return false;
+  return ["true", "1", "yes"].includes(value.trim().toLowerCase());
+}
+
 async function importWallet(args: {
   secretKey?: string;
   profile?: string;
-  persist?: boolean;
+  confirm?: unknown;
 }): Promise<ToolOutcome> {
   const target = resolveProfileName(args.profile);
-  const persist = args.persist !== false;
 
   let secretKey = args.secretKey;
   if (!secretKey) {
@@ -759,29 +765,36 @@ async function importWallet(args: {
     throw new Error(`Failed to derive public key: ${safeErrorMessage(err)}`);
   }
 
-  if (persist) {
-    activeProfileName = target;
-    activeProfile().wallet = { publicKey, secretKey };
-    bindActiveProfileToNetwork();
-    saveState();
+  const confirmed = isImportConfirmed(args.confirm);
+
+  if (!confirmed) {
     return {
       text: [
-        `Wallet imported.`,
-        `Profile: ${target}`,
-        `Address: ${publicKey}`,
-        `Wallet persisted to ${STATE_FILE} (mode 0600).`,
+        `Wallet NOT imported — confirmation required.`,
+        `Derived address: ${publicKey}`,
+        `Target profile:  ${target}`,
+        `Network:         ${NETWORK} (${STELLAR_NETWORK})`,
+        ``,
+        `Verify the address above belongs to the intended wallet.`,
+        `To save it, call mindvault_import_wallet again with confirm: true.`,
       ].join("\n"),
-      structured: { profile: target, address: publicKey, persisted: true },
+      structured: { profile: target, address: publicKey, persisted: false },
     };
   }
 
+  activeProfileName = target;
+  activeProfile().wallet = { publicKey, secretKey };
+  bindActiveProfileToNetwork();
+  saveState();
   return {
     text: [
-      `Wallet validated (not persisted).`,
+      `Wallet imported.`,
+      `Profile: ${target}`,
       `Address: ${publicKey}`,
-      `Pass persist: true to save to the state file.`,
+      `Network: ${NETWORK} (${STELLAR_NETWORK})`,
+      `Wallet persisted to ${STATE_FILE} (mode 0600).`,
     ].join("\n"),
-    structured: { profile: target, address: publicKey, persisted: false },
+    structured: { profile: target, address: publicKey, persisted: true },
   };
 }
 
@@ -4320,7 +4333,7 @@ async function dispatchToolOutcome(
         return importWallet({
           secretKey: optionalString(args, "secretKey"),
           profile: optionalString(args, "profile"),
-          persist: flag(args, "persist"),
+          confirm: flag(args, "confirm"),
         });
       case "mindvault_rotate_publisher_key":
         return rotatePublisherKey(optionalString(args, "profile"));

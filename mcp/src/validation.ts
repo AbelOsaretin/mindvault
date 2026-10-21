@@ -475,7 +475,7 @@ export const TOOL_ARGUMENT_SPECS: Record<string, ToolArgumentSpec> = {
       patternHint: "a Stellar secret key (S… , 56 chars)",
     },
     profile: PROFILE_NAME,
-    persist: { kind: "flag" },
+    confirm: { kind: "flag" },
     confirmMainnet: CONFIRM_MAINNET,
   },
   mindvault_rotate_publisher_key: {

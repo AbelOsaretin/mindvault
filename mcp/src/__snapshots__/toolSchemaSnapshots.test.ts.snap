@@ -2983,16 +2983,15 @@ exports[`tool schema snapshots > mindvault_import_wallet > annotations 1`] = `
 exports[`tool schema snapshots > mindvault_import_wallet > input schema 1`] = `
 {
   "properties": {
-    "confirmMainnet": {
-      "description": "Required on mainnet (or set MINDVAULT_ALLOW_MAINNET=1). Explicitly confirm this mutation on the public Stellar network.",
-      "type": "boolean",
-    },
-    "persist": {
-      "description": "When true (default), save the imported wallet to the state file. When false, validate only and return the public key without writing to disk.",
+    "confirm": {
+      "description": "Must be true to persist the wallet. Without it the tool derives and displays the address but writes nothing, so the agent can verify the address before committing.",
       "examples": [
         true,
-        false,
       ],
+      "type": "boolean",
+    },
+    "confirmMainnet": {
+      "description": "Required on mainnet (or set MINDVAULT_ALLOW_MAINNET=1). Explicitly confirm this mutation on the public Stellar network.",
       "type": "boolean",
     },
     "profile": {
