@@ -16,15 +16,35 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { listCatalogResources, readCatalogResource } from "./catalogResources.js";
+import {
+  SubmittedTransactionUnconfirmed,
+  signAndSendTracked,
+  submittedUnconfirmedResult,
+} from "./submittedTransaction.js";
+import {
+  SERVER_STATUS_URI,
+  createServerStatusWatcher,
+  serverStatusContents,
+  serverStatusResource,
+  type ServerStatusInput,
+} from "./serverStatusResource.js";
 import { PROMPT_DEFINITIONS, getPrompt } from "./prompts.js";
-import { createProgressEmitter, scopeProgressToRequest } from "./progress.js";
+import {
+  createProgressEmitter,
+  scopeProgressToRequest,
+  sequenceProgressNotifications,
+} from "./progress.js";
 import { truncateResponse } from "./truncation.js";
 import { applyPreviewLimits, serializePreview } from "./previewLimits.js";
 import { createEd25519Signer } from "@x402/stellar";
@@ -46,7 +66,7 @@ import {
   assertPaidOperationConfirmed,
   formatPaidConfirmationDiagnostics,
 } from "./paidOperations.js";
-import { assertToolAllowedInReadOnlyMode } from "./readOnlyMode.js";
+import { assertToolAllowedInReadOnlyMode, readOnlyModeEnabled } from "./readOnlyMode.js";
 import {
   createMetricsRecorder,
   measureTool,
@@ -78,7 +98,8 @@ import { exportReceiptsTool } from "./receipts.js";
 import { debugBundleTool } from "./debugBundle.js";
 import { exportReceiptsToolWithTimeout } from "./receipts.js";
 import { normalizeToolResult, outcomeText, type ToolOutcome } from "./toolResult.js";
-import { advertisedTools, hasOutputSchema } from "./toolSurface.js";
+import { advertisedTools, hasOutputSchema, outputSchemaFor } from "./toolSurface.js";
+import { enforceOutputContract } from "./outputValidation.js";
 import { dryRunPublish, dryRunBuy } from "./dryRun.js";
 import { initAuditLogging } from "./auditLog.js";
 import { REGISTRY_LIST_DEFAULT_LIMIT, REGISTRY_LIST_DEFAULT_START } from "./registryPagination.js";
@@ -99,6 +120,8 @@ import {
   DEFAULT_PROFILE,
   isValidProfileName,
   migrateState,
+  exportProfileState,
+  importProfileState,
   STATE_VERSION,
   type AgentWallet,
   type ProfileState,
@@ -123,6 +146,7 @@ import {
   type ResourceSubscriptionSnapshot,
 } from "./resourceSubscriptionTool.js";
 import { type ApiResponse } from "./apiResponse.js";
+import { readBoundedResponse, resolveMaxResponseBytes } from "./responseSize.js";
 import { safeErrorMessage, safeLog } from "./redaction.js";
 import {
   assertAutoPaymentWithinCeiling,
@@ -140,6 +164,7 @@ import {
   exportStateFile,
   restoreState,
   checkStatePermissions,
+  compareStateWithBackup,
   preserveLegacyState,
   quarantineStateFile,
   writeAtomically,
@@ -149,9 +174,7 @@ import { logger } from "./logger.js";
 import {
   buildSettlementSnapshot,
   estimateSettlementSteps,
-  normalizeSettlementIntervalMs,
-  normalizeSettlementTimeoutMs,
-  normalizeSettlementWaitFlag,
+  resolveTransactionWait,
   pollSettlement,
   type SettlementSnapshot,
   type TransactionLookup,
@@ -181,6 +204,7 @@ import {
   withRetry,
   type RetryAttemptInfo,
 } from "./retry.js";
+import { createRateLimitCoordinator } from "./rateLimitCoordinator.js";
 import {
   mapHttpError,
   mapRegistryError,
@@ -226,7 +250,9 @@ import {
   getPreviewSnapshot,
   recordCatalogSnapshot,
   recordPreviewSnapshot,
+  type CatalogCacheContext,
 } from "./catalogCache.js";
+import { createCatalogCursor, resolveCatalogCursor } from "./catalogCursor.js";
 import { publishBatch, type BatchPublishItem } from "./tools/publish.js";
 import { buyLease, leaseStatus } from "./tools/leases.js";
 
@@ -247,6 +273,19 @@ const SPONSORED_ACCOUNT_URL = initialConfig.sponsoredAccountUrl;
 let HORIZON_URL = initialConfig.horizonUrl;
 let SOROBAN_RPC_URL = initialConfig.sorobanRpcUrl;
 const PLATFORM_WALLET_ADDRESS = initialConfig.platformWalletAddress;
+
+function catalogCacheContext(): CatalogCacheContext {
+  return {
+    profile: activeProfileName,
+    network: STELLAR_NETWORK,
+    contractId: REGISTRY_CONTRACT_ID,
+    apiOrigin: new URL(BASE_URL).origin,
+  };
+}
+
+function catalogCacheKey(url: string): string {
+  return url;
+}
 
 function applyNetworkConfig(network: "testnet" | "mainnet"): void {
   process.env.STELLAR_NETWORK = network;
@@ -303,14 +342,22 @@ const logRetry = process.env.VITEST
   ? undefined
   : (info: RetryAttemptInfo) => logger.info(`MindVault MCP: ${formatRetryLog(info)}`);
 
-function httpRetryOptions(label: string) {
+const RATE_LIMITS = createRateLimitCoordinator();
+
+function httpRetryOptions(label: string, url?: string) {
   return {
     policy: RETRY_POLICY,
     label,
     shouldRetryResult: (res: Response) => isRetryableStatus(res.status),
     describeResult: (res: Response) => `HTTP ${res.status}`,
-    delayFromResult: (res: Response) =>
-      retryAfterDelay(res.headers?.get?.("retry-after"), RETRY_POLICY),
+    delayFromResult: (res: Response) => {
+      const delay = retryAfterDelay(res.headers?.get?.("retry-after"), RETRY_POLICY);
+      // Share a server-supplied 429 backoff with every other in-flight call to
+      // the same origin (#1069). A 429 without Retry-After records nothing.
+      if (url && res.status === 429) RATE_LIMITS.noteRateLimit(url, delay);
+      return delay;
+    },
+    beforeAttempt: url ? () => RATE_LIMITS.acquire(url) : undefined,
     onRetry: logRetry,
   };
 }
@@ -325,7 +372,7 @@ function sorobanRpcFetch(init: RequestInit, label: string): Promise<Response> {
   };
   return withRetry(
     () => fetchWithTimeout(httpFetch, SOROBAN_RPC_URL, initWithUA, "soroban", TIMEOUTS.soroban),
-    httpRetryOptions(label),
+    httpRetryOptions(label, SOROBAN_RPC_URL),
   );
 }
 
@@ -395,6 +442,10 @@ export function restoreStateTool(blob: string, passphrase: string): string {
   return restoreState(blob, passphrase, applyRestoredState, {
     expectedNetwork: NETWORK,
   });
+}
+
+export function compareStateBackupTool(blob: string, passphrase: string): string {
+  return JSON.stringify(compareStateWithBackup(blob, passphrase), null, 2);
 }
 
 function quarantineCorruptState(reason: string, detail: string): void {
@@ -554,7 +605,7 @@ async function checkDependency(
   try {
     const res = await withRetry(
       () => fetchWithTimeout(httpFetch, url, initWithUA, "http", TIMEOUTS.http),
-      httpRetryOptions(`health:${name}`),
+      httpRetryOptions(`health:${name}`, url),
     );
     if (res.ok) {
       return { name, ok: true, message: `Reachable (HTTP ${res.status})` };
@@ -630,7 +681,7 @@ export async function prewarmCatalogCache(): Promise<string> {
   try {
     await browseOutcome({});
     const elapsedMs = Date.now() - startedAt;
-    const snapshot = getCatalogSnapshot();
+    const snapshot = getCatalogSnapshot(Date.now(), "catalog", catalogCacheContext());
     const count = snapshot && Array.isArray(snapshot.resources) ? snapshot.resources.length : 0;
     return `Catalog pre-warmed: ${count} resource(s) cached in ${elapsedMs}ms.`;
   } catch (err) {
@@ -835,7 +886,7 @@ async function jsonFetch(url: string, init?: RequestInit): Promise<ApiResponse<a
         TIMEOUTS[service],
       );
     res = isIdempotentMethod(method)
-      ? await withRetry(call, httpRetryOptions(`${method} ${new URL(url).pathname}`))
+      ? await withRetry(call, httpRetryOptions(`${method} ${new URL(url).pathname}`, url))
       : await call();
   } catch (err) {
     const source = sourceForUrl(url);
@@ -846,7 +897,7 @@ async function jsonFetch(url: string, init?: RequestInit): Promise<ApiResponse<a
   res.headers.forEach((value, key) => {
     responseHeaders[key.toLowerCase()] = value;
   });
-  const text = await res.text();
+  const text = await readBoundedResponse(res, resolveMaxResponseBytes());
   try {
     return { ok: res.ok, status: res.status, data: JSON.parse(text), headers: responseHeaders };
   } catch {
@@ -944,7 +995,7 @@ async function getBalanceDetails(publicKey: string): Promise<BalanceDetails> {
           "horizon",
           TIMEOUTS.horizon,
         ),
-      httpRetryOptions("GET horizon /accounts"),
+      httpRetryOptions("GET horizon /accounts", `${HORIZON_URL}/accounts/${publicKey}`),
     );
   } catch (err) {
     throw mcpError(
@@ -1063,7 +1114,7 @@ async function getAccountBalances(
         "horizon",
         TIMEOUTS.horizon,
       ),
-    httpRetryOptions("GET horizon /accounts"),
+    httpRetryOptions("GET horizon /accounts", `${HORIZON_URL}/accounts/${publicKey}`),
   );
   if (!res.ok) return { usdc: "0", native: "0", funded: false };
   const data: any = await res.json();
@@ -1099,7 +1150,12 @@ function catalogItemStructured(r: any): {
   };
 }
 
-function catalogOutcome(items: any[], body: string, notice: string | null): ToolOutcome {
+function catalogOutcome(
+  items: any[],
+  body: string,
+  notice: string | null,
+  options: { cacheStatus?: "live" | "bypassed" | "offline"; nextCursor?: string | null } = {},
+): ToolOutcome {
   const full = notice ? `${body}\n\n${notice}` : body;
   const text = truncateResponse(full);
   return {
@@ -1107,6 +1163,8 @@ function catalogOutcome(items: any[], body: string, notice: string | null): Tool
     structured: {
       items: items.map(catalogItemStructured),
       notice,
+      cacheStatus: options.cacheStatus ?? (notice ? "offline" : "live"),
+      nextCursor: options.nextCursor ?? null,
       truncated: text !== full,
     },
   };
@@ -1345,7 +1403,16 @@ async function setupWallet(profileArg?: string): Promise<ToolOutcome> {
 async function repairSponsoredAccount(secretKey: string, profileArg?: string): Promise<string> {
   const target = resolveProfileName(profileArg);
   const { Keypair } = await import("@stellar/stellar-sdk");
-  const publicKey = Keypair.fromSecret(secretKey).publicKey();
+  let publicKey: string;
+  try {
+    publicKey = Keypair.fromSecret(secretKey).publicKey();
+  } catch (err) {
+    // Never echo the secret key in error messages — describe the shape problem instead.
+    throw new Error(
+      `Invalid Stellar secret key: could not derive public key. ` +
+        `Expected S followed by 55 base32 characters (${safeErrorMessage(err)}).`,
+    );
+  }
   const details = await getBalanceDetails(publicKey);
 
   if (details.status === "missing") {
@@ -1776,6 +1843,35 @@ export function listProfiles(): string {
   return outcomeText(listProfilesOutcome());
 }
 
+export function exportProfilesOutcome(): ToolOutcome {
+  const payload = exportProfileState({
+    version: STATE_VERSION,
+    activeProfile: activeProfileName,
+    profiles,
+  });
+  return { text: JSON.stringify(payload, null, 2), structured: payload };
+}
+
+export function importProfilesOutcome(data: string): ToolOutcome {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    throw new Error("Profile export must be valid JSON.");
+  }
+  const result = importProfileState(
+    { version: STATE_VERSION, activeProfile: activeProfileName, profiles },
+    parsed,
+  );
+  profiles = result.state.profiles;
+  activeProfileName = result.state.activeProfile;
+  saveState();
+  return {
+    text: `Imported ${result.imported.length} profile setup(s) without changing credentials.`,
+    structured: { imported: result.imported },
+  };
+}
+
 /**
  * Whether a failed catalog read should fall back to the offline snapshot (#837).
  *
@@ -1804,10 +1900,14 @@ function catalogFallbackFor(err: unknown): CatalogFallbackReason | null {
 }
 
 /** Resolve a failed catalog read to a snapshot, or rethrow when it must surface. */
-function catalogSnapshotFor(err: unknown): { resources: unknown[]; notice: string } | null {
+function catalogSnapshotFor(
+  err: unknown,
+  key = "catalog",
+  context = catalogCacheContext(),
+): { resources: unknown[]; notice: string } | null {
   const reason = catalogFallbackFor(err);
   if (!reason) return null;
-  const snapshot = getCatalogSnapshot();
+  const snapshot = getCatalogSnapshot(Date.now(), key, context);
   if (!snapshot) return null;
   return {
     resources: snapshot.resources,
@@ -1816,10 +1916,19 @@ function catalogSnapshotFor(err: unknown): { resources: unknown[]; notice: strin
 }
 
 async function browseOutcome(filters: CatalogFilters = {}): Promise<ToolOutcome> {
-  const qs = buildCatalogQueryString(filters);
+  const context = catalogCacheContext();
+  const cursorResult = filters.cursor
+    ? resolveCatalogCursor(filters.cursor, filters, context)
+    : { ok: true as const, offset: filters.offset };
+  if (!cursorResult.ok) return catalogOutcome([], cursorResult.error, null);
+  const requestFilters =
+    cursorResult.offset === undefined ? filters : { ...filters, offset: cursorResult.offset };
+  const qs = buildCatalogQueryString(requestFilters);
   const url = qs ? `${BASE_URL}/resources?${qs}` : `${BASE_URL}/resources`;
   let raw: any[] = [];
   let notice: string | null = null;
+  let nextOffset: number | null = null;
+  let fromCache = false;
   try {
     const res = await jsonFetch(url);
     if (!res.ok) {
@@ -1833,13 +1942,29 @@ async function browseOutcome(filters: CatalogFilters = {}): Promise<ToolOutcome>
       );
     }
     raw = Array.isArray(res.data) ? res.data : [];
-    recordCatalogSnapshot(raw);
+    recordCatalogSnapshot(raw, catalogCacheKey(url), context);
     notice = cacheStalenessNotice(res.headers);
+    const header = res.headers["x-next-offset"];
+    nextOffset = header === undefined ? null : Number(header);
   } catch (err) {
-    const fallback = catalogSnapshotFor(err);
+    const fallback = filters.bypassCache
+      ? null
+      : (() => {
+          const reason = catalogFallbackFor(err);
+          const snapshot = reason
+            ? getCatalogSnapshot(Date.now(), catalogCacheKey(url), context)
+            : null;
+          return snapshot && reason
+            ? {
+                resources: snapshot.resources,
+                notice: catalogCacheLabel(snapshot.savedAtMs, Date.now(), reason),
+              }
+            : null;
+        })();
     if (!fallback) throw err;
     raw = Array.isArray(fallback.resources) ? (fallback.resources as any[]) : [];
     notice = fallback.notice;
+    fromCache = true;
   }
   const items: any[] = applyCatalogSort(applyClientCatalogFilters(raw, filters), filters.sort);
   const body =
@@ -1855,7 +1980,14 @@ async function browseOutcome(filters: CatalogFilters = {}): Promise<ToolOutcome>
         ? `No resources match ${describeCatalogFilters(filters)}.`
         : "No resources listed yet."
       : items.map(formatResource).join("\n\n");
-  return catalogOutcome(items, body, notice);
+  const nextCursor =
+    nextOffset !== null && Number.isInteger(nextOffset)
+      ? createCatalogCursor(nextOffset, filters, context)
+      : null;
+  return catalogOutcome(items, body, notice, {
+    cacheStatus: fromCache ? "offline" : filters.bypassCache ? "bypassed" : "live",
+    nextCursor,
+  });
 }
 
 export async function browse(filters: CatalogFilters = {}): Promise<string> {
@@ -1877,7 +2009,8 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
     filters.limit !== undefined ||
     filters.offset !== undefined ||
     (filters.tags && filters.tags.length > 0) ||
-    filters.listed !== undefined,
+    filters.listed !== undefined ||
+    filters.cursor,
   );
   if (!hasCriteria) {
     return catalogOutcome([], "Provide a search query or at least one catalog filter.", null);
@@ -1887,8 +2020,19 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
   const url = qs ? `${BASE_URL}/resources?${qs}` : `${BASE_URL}/resources`;
   let raw: any[] = [];
   let notice: string | null = null;
+  let nextOffset: number | null = null;
+  let fromCache = false;
+  const context = catalogCacheContext();
+  const cursorResult = filters.cursor
+    ? resolveCatalogCursor(filters.cursor, filters, context)
+    : { ok: true as const, offset: filters.offset };
+  if (!cursorResult.ok) return catalogOutcome([], cursorResult.error, null);
+  const requestFilters =
+    cursorResult.offset === undefined ? filters : { ...filters, offset: cursorResult.offset };
+  const requestQs = buildCatalogQueryString(requestFilters);
+  const requestUrl = requestQs ? `${BASE_URL}/resources?${requestQs}` : `${BASE_URL}/resources`;
   try {
-    const res = await jsonFetch(url);
+    const res = await jsonFetch(requestUrl);
     if (!res.ok) {
       throw mcpError(
         mapHttpError({
@@ -1900,13 +2044,18 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
       );
     }
     raw = Array.isArray(res.data) ? res.data : [];
-    recordCatalogSnapshot(raw);
+    recordCatalogSnapshot(raw, catalogCacheKey(requestUrl), context);
     notice = cacheStalenessNotice(res.headers);
+    const header = res.headers["x-next-offset"];
+    nextOffset = header === undefined ? null : Number(header);
   } catch (err) {
-    const fallback = catalogSnapshotFor(err);
+    const fallback = filters.bypassCache
+      ? null
+      : catalogSnapshotFor(err, catalogCacheKey(requestUrl), context);
     if (!fallback) throw err;
     raw = Array.isArray(fallback.resources) ? (fallback.resources as any[]) : [];
     notice = fallback.notice;
+    fromCache = true;
   }
 
   // Client-side keyword / tags / listed / skipped for unit-test compatibility
@@ -1914,9 +2063,21 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
   const items = applyCatalogSort(applyClientCatalogFilters(raw, filters), filters.sort);
 
   if (items.length === 0) {
-    return catalogOutcome([], `No resources match ${describeCatalogFilters(filters)}.`, notice);
+    return catalogOutcome([], `No resources match ${describeCatalogFilters(filters)}.`, notice, {
+      cacheStatus: fromCache ? "offline" : filters.bypassCache ? "bypassed" : "live",
+      nextCursor:
+        nextOffset !== null && Number.isInteger(nextOffset)
+          ? createCatalogCursor(nextOffset, filters, context)
+          : null,
+    });
   }
-  return catalogOutcome(items, items.map(formatResource).join("\n\n"), notice);
+  return catalogOutcome(items, items.map(formatResource).join("\n\n"), notice, {
+    cacheStatus: fromCache ? "offline" : filters.bypassCache ? "bypassed" : "live",
+    nextCursor:
+      nextOffset !== null && Number.isInteger(nextOffset)
+        ? createCatalogCursor(nextOffset, filters, context)
+        : null,
+  });
 }
 
 export async function search(filtersOrQuery: string | CatalogFilters): Promise<string> {
@@ -1929,7 +2090,10 @@ export async function search(filtersOrQuery: string | CatalogFilters): Promise<s
  * reachable-but-error response is surfaced verbatim — the cache only covers the
  * unreachable case.
  */
-async function previewData(resourceId: string): Promise<{ r: any; label: string | null }> {
+async function previewData(
+  resourceId: string,
+  bypassCache = false,
+): Promise<{ r: any; label: string | null; cacheStatus: "live" | "bypassed" | "offline" }> {
   try {
     const res = await jsonFetch(`${BASE_URL}/resources/${resourceId}/meta`);
     if (!res.ok)
@@ -1939,20 +2103,24 @@ async function previewData(resourceId: string): Promise<{ r: any; label: string 
         status: res.status,
         data: res.data,
       });
-    recordPreviewSnapshot(resourceId, res.data);
-    return { r: res.data, label: null };
+    recordPreviewSnapshot(resourceId, res.data, catalogCacheContext());
+    return { r: res.data, label: null, cacheStatus: bypassCache ? "bypassed" : "live" };
   } catch (err) {
     // Same rule as browse/search: a snapshot answers for a catalog that could
     // not answer, never for a 404 on an id the agent got wrong (#837).
-    const reason = catalogFallbackFor(err);
-    const snap = reason ? getPreviewSnapshot(resourceId) : null;
+    const reason = bypassCache ? null : catalogFallbackFor(err);
+    const snap = reason ? getPreviewSnapshot(resourceId, Date.now(), catalogCacheContext()) : null;
     if (!snap || !reason) throw err;
-    return { r: snap.meta as any, label: catalogCacheLabel(snap.savedAtMs, Date.now(), reason) };
+    return {
+      r: snap.meta as any,
+      label: catalogCacheLabel(snap.savedAtMs, Date.now(), reason),
+      cacheStatus: "offline",
+    };
   }
 }
 
-export async function preview(resourceId: string): Promise<string> {
-  const { r, label } = await previewData(resourceId);
+export async function preview(resourceId: string, bypassCache = false): Promise<string> {
+  const { r, label, cacheStatus } = await previewData(resourceId, bypassCache);
   // Publisher-supplied title/description are unbounded at the source, so cap
   // them before serializing rather than truncating the JSON afterwards (#582).
   const out: Record<string, unknown> = applyPreviewLimits({
@@ -1963,6 +2131,7 @@ export async function preview(resourceId: string): Promise<string> {
     type: r.resourceType,
     verificationStatus: r.verificationStatus,
     accessUrl: r.accessUrl,
+    cacheStatus,
   });
   if (label) out.offlineCache = label;
   return serializePreview(out);
@@ -2253,6 +2422,8 @@ export async function buy(
   wait?: unknown,
   timeoutMs?: unknown,
   intervalMs?: unknown,
+  waitPolicy?: unknown,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (dryRun) {
     const initialDryRun = dryRunBuy(
@@ -2361,17 +2532,21 @@ export async function buy(
     logger.error("MindVault MCP: failed to persist purchase receipt:", safeErrorMessage(err));
   }
 
-  // Settlement confirmation (#888): when the caller passes wait: true we poll
-  // the payment transaction until it settles or the deadline passes. The
-  // progress counter continues after step 3 and stays monotonic while the
-  // poller reports; without wait the counter is untouched and the summary
-  // simply carries an un-polled settlement block.
-  const waitForSettlement = normalizeSettlementWaitFlag(wait);
-  const settleTimeoutMs = normalizeSettlementTimeoutMs(timeoutMs);
-  const settleIntervalMs = normalizeSettlementIntervalMs(intervalMs);
+  // Settlement confirmation (#888, #1058): the caller chooses a wait policy.
+  // `return-after-submit` returns as soon as the payment response arrives and
+  // reports the hash plus whatever status is known; `wait-for-final-result`
+  // polls the transaction until it settles or the (bounded) deadline passes.
+  // `wait: true` is still accepted and mapped onto `wait-for-final-result` for
+  // existing clients. The progress counter continues after step 3 and stays
+  // monotonic while the poller reports.
+  const waitOptions = resolveTransactionWait({ waitPolicy, wait, timeoutMs, intervalMs });
+  const waitForSettlement = waitOptions.wait;
+  const settleTimeoutMs = waitOptions.timeoutMs;
+  const settleIntervalMs = waitOptions.intervalMs;
   let settlement: SettlementSnapshot = buildSettlementSnapshot({
     txHash,
     wait: waitForSettlement,
+    waitPolicy: waitOptions.policy,
     skipped: waitForSettlement && !txHash,
     result: null,
   });
@@ -2394,10 +2569,12 @@ export async function buy(
         await onProgress?.(4 + p, 4 + (total ?? settleSteps), message);
       },
       sleep: sleepMs,
+      signal,
     });
     settlement = buildSettlementSnapshot({
       txHash,
       wait: true,
+      waitPolicy: waitOptions.policy,
       skipped: false,
       result,
     });
@@ -2597,17 +2774,29 @@ export async function updateMetadata(resourceId: string, metadata: string): Prom
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Update metadata", resourceId, err, { metadata }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Update metadata submission failed for resource "${resourceId}"`,
@@ -2616,7 +2805,6 @@ export async function updateMetadata(resourceId: string, metadata: string): Prom
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "metadata",
@@ -2686,17 +2874,29 @@ export async function setPrice(resourceId: string, price: string): Promise<strin
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Set price", resourceId, err, { price }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set price submission failed for resource "${resourceId}"`,
@@ -2705,7 +2905,6 @@ export async function setPrice(resourceId: string, price: string): Promise<strin
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "price",
@@ -2773,17 +2972,29 @@ export async function transferOwnership(resourceId: string, newCreator: string):
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Transfer ownership", resourceId, err, { newCreator }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Transfer ownership submission failed for resource "${resourceId}"`,
@@ -2792,7 +3003,6 @@ export async function transferOwnership(resourceId: string, newCreator: string):
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   recordResourceHistory({
     resourceId,
     kind: "transferred",
@@ -2860,17 +3070,29 @@ export async function setListed(resourceId: string, listed: boolean): Promise<st
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return JSON.stringify(
+        submittedUnconfirmedResult("Set listed", resourceId, err, { listed }),
+        null,
+        2,
+      );
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set listed submission failed for resource "${resourceId}"`,
@@ -2879,7 +3101,6 @@ export async function setListed(resourceId: string, listed: boolean): Promise<st
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   return JSON.stringify(
     {
       status: "success",
@@ -2939,17 +3160,30 @@ export async function setTags(resourceId: string, tags: string[]): Promise<strin
 
   const { Keypair } = await import("@stellar/stellar-sdk");
   const keypair = Keypair.fromSecret(wallet.secretKey);
-  let sentTx;
+  let txHash: string | null;
   try {
-    sentTx = await tx.signAndSend({
-      signTransaction: async (xdr: string) => {
-        const { Transaction } = await import("@stellar/stellar-sdk");
-        const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
-        stellarTx.sign(keypair);
-        return { signedTxXdr: stellarTx.toXDR() };
-      },
-    });
+    ({ txHash } = await signAndSendTracked((watcher) =>
+      tx.signAndSend({
+        signTransaction: async (xdr: string) => {
+          const { Transaction } = await import("@stellar/stellar-sdk");
+          const stellarTx = new Transaction(xdr, REGISTRY_NETWORK_PASSPHRASE);
+          stellarTx.sign(keypair);
+          return { signedTxXdr: stellarTx.toXDR() };
+        },
+        watcher,
+      }),
+    ));
   } catch (err: any) {
+    // Submitted but unconfirmed: keep the hash and hand back a status lookup
+    // instead of a failure the agent would answer by resubmitting (#1060).
+    if (err instanceof SubmittedTransactionUnconfirmed) {
+      return [
+        `Tags submitted for resource "${resourceId}" but not confirmed.`,
+        `Tags: ${tags.length > 0 ? tags.join(", ") : "(none)"}`,
+        `Tx hash: ${err.txHash}`,
+        submittedUnconfirmedResult("Set tags", resourceId, err).message,
+      ].join("\n");
+    }
     throw mcpError(
       mapRegistryError({
         operation: `Set tags submission failed for resource "${resourceId}"`,
@@ -2958,7 +3192,6 @@ export async function setTags(resourceId: string, tags: string[]): Promise<strin
     );
   }
 
-  const txHash = sentTx?.sendTransactionResponse?.hash ?? null;
   return [
     `Tags updated for resource "${resourceId}".`,
     `Tags: ${tags.length > 0 ? tags.join(", ") : "(none)"}`,
@@ -3832,9 +4065,7 @@ const stateMutex = new Mutex();
 
 async function dispatchToolOutcome(
   name: string,
-  args: ValidatedArgs,
-  dryRunArgs: ValidatedArgs,
-  rawRecord: Record<string, unknown>,
+  rawArgs: unknown,
   onProgress?: (progress: number, total?: number, message?: string) => Promise<void>,
 ): Promise<ToolOutcome> {
   if (!isDispatchableTool(name)) {
@@ -3898,6 +4129,10 @@ async function dispatchToolOutcome(
         );
       case "mindvault_list_profiles":
         return listProfilesOutcome();
+      case "mindvault_export_profiles":
+        return exportProfilesOutcome();
+      case "mindvault_import_profiles":
+        return importProfilesOutcome(requiredString(args, "data"));
       case "mindvault_browse": {
         const parsed = parseCatalogFilters(rawRecord);
         return parsed.ok ? browseOutcome(parsed.filters) : parsed.error;
@@ -3907,7 +4142,7 @@ async function dispatchToolOutcome(
         return parsed.ok ? searchOutcome(parsed.filters) : parsed.error;
       }
       case "mindvault_preview":
-        return preview(requiredString(args, "resourceId"));
+        return preview(requiredString(args, "resourceId"), flag(args, "bypassCache"));
       case "mindvault_register":
         return register(
           requiredString(args, "name"),
@@ -3967,6 +4202,7 @@ async function dispatchToolOutcome(
           args.wait,
           args.timeoutMs,
           args.intervalMs,
+          args.waitPolicy,
         );
       case "mindvault_buy_lease":
         return buyLease(requiredString(args, "resourceId"), requiredString(args, "tier"), {
@@ -4051,6 +4287,11 @@ async function dispatchToolOutcome(
         return resetState(flag(args, "all"), rawRecord.confirm);
       case "mindvault_backup_state":
         return backupState(requiredString(args, "passphrase"), rawRecord.confirm);
+      case "mindvault_compare_state_backup":
+        return compareStateBackupTool(
+          requiredString(args, "blob"),
+          requiredString(args, "passphrase"),
+        );
       case "mindvault_resource_provenance":
         return provenanceChain(requiredString(args, "resourceId"));
       case "mindvault_resource_change_log":
@@ -4112,10 +4353,56 @@ export function normalizeToolResultForTest(name: string, outcome: ToolOutcome) {
   return normalizeToolResult(name, outcome, hasOutputSchema);
 }
 
-const server = new Server(
-  { name: "mindvault", version: "1.0.0" },
-  { capabilities: { tools: {}, prompts: {}, resources: {} } },
-);
+const SERVER_IDENTITY = { name: "mindvault", version: "1.0.0" };
+
+const server = new Server(SERVER_IDENTITY, {
+  capabilities: { tools: {}, prompts: {}, resources: { subscribe: true } },
+});
+
+// ── Server status resource (#1064) ──────────────────────────────────────────
+// mindvault://server/status: the active network, registry contract, tool
+// capability version, and safe operational flags. Built from live values on
+// every read, so it follows profile and network switches; wallet state is
+// reduced to booleans and nothing secret or identifying is included.
+
+function serverStatusInput(): ServerStatusInput {
+  const profile = activeProfile();
+  return {
+    serverName: SERVER_IDENTITY.name,
+    serverVersion: SERVER_IDENTITY.version,
+    stellarNetwork: STELLAR_NETWORK,
+    x402Network: NETWORK,
+    registryContractId: REGISTRY_CONTRACT_ID,
+    networkPassphrase: REGISTRY_NETWORK_PASSPHRASE,
+    tools: advertisedTools(process.env),
+    readOnly: readOnlyModeEnabled(process.env),
+    mock: _isMock(),
+    walletConfigured: !!profile.wallet,
+    publisherRegistered: !!profile.apiKey,
+  };
+}
+
+/** Test helper: the status resource exactly as resources/read returns it. */
+export function readServerStatusForTest() {
+  return serverStatusContents(serverStatusInput());
+}
+
+const serverStatus = createServerStatusWatcher(() => serverStatusContents(serverStatusInput()));
+
+server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  if (!serverStatus.subscribe(request.params.uri)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Only ${SERVER_STATUS_URI} supports subscriptions; catalog resources do not.`,
+    );
+  }
+  return {};
+});
+
+server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  serverStatus.unsubscribe(request.params.uri);
+  return {};
+});
 
 // ── MCP resources (#545) ─────────────────────────────────────────────────────
 // The vault catalog is exposed as resources so agents can discover entries
@@ -4124,11 +4411,15 @@ const server = new Server(
 // return gated content — only the public meta endpoint is consulted.
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: await listCatalogResources(),
+  resources: [serverStatusResource(), ...(await listCatalogResources())],
 }));
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
-  contents: [await readCatalogResource(request.params.uri)],
+  contents: [
+    request.params.uri === SERVER_STATUS_URI
+      ? serverStatusContents(serverStatusInput())
+      : await readCatalogResource(request.params.uri),
+  ],
 }));
 
 // ListTools is derived from TOOL_DEFINITIONS rather than restated here (#596).
@@ -4145,12 +4436,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args = {} } = request.params;
   const progressToken = request.params._meta?.progressToken;
+  // Compared after the call so a subscriber hears about a profile or network
+  // switch (#1064). Only computed while someone is subscribed.
+  const statusBefore = serverStatus.subscribed ? serverStatus.snapshot() : undefined;
   // Settled in `finally`, before the result is returned, so every progress
   // notification for this call goes out ahead of it and none after (#841).
   const progress =
     progressToken != null
       ? scopeProgressToRequest(
-          createProgressEmitter({ token: progressToken, send: extra.sendNotification }),
+          createProgressEmitter({
+            token: progressToken,
+            // Stamped with a replay-safe event id per notification (#1061).
+            send: sequenceProgressNotifications(extra.sendNotification),
+          }),
         )
       : undefined;
   try {
@@ -4163,16 +4461,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     if (metricsExportToConsoleEnabled(process.env) && metrics.enabled) {
       console.error(metricsExportLine(metrics.snapshot(), "otlp"));
     }
-    return normalizeToolResult(name, result, hasOutputSchema);
+    // Checked against the advertised outputSchema before it is sent (#1062).
+    return enforceOutputContract(
+      name,
+      normalizeToolResult(name, result, hasOutputSchema),
+      outputSchemaFor(name),
+    );
   } catch (err: any) {
     const mapped = mappedErrorOf(err);
-    return {
-      content: [{ type: "text", text: `Error: ${safeErrorMessage(err)}` }],
-      isError: true,
-      ...(mapped ? { structuredContent: { troubleshooting: troubleshootingHint(mapped) } } : {}),
-    };
+    return enforceOutputContract(
+      name,
+      {
+        content: [{ type: "text", text: `Error: ${safeErrorMessage(err)}` }],
+        isError: true,
+        ...(mapped ? { structuredContent: { troubleshooting: troubleshootingHint(mapped) } } : {}),
+      },
+      outputSchemaFor(name),
+    );
   } finally {
     await progress?.settle();
+    if (statusBefore !== undefined && serverStatus.changedSince(statusBefore)) {
+      void server.sendResourceUpdated({ uri: SERVER_STATUS_URI }).catch(() => {});
+    }
   }
 });
 

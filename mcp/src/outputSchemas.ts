@@ -38,9 +38,11 @@ export const CATALOG_LIST_OUTPUT_SCHEMA = {
   properties: {
     items: { type: "array", items: CATALOG_ITEM_SCHEMA },
     notice: { type: ["string", "null"] },
+    cacheStatus: { type: "string", enum: ["live", "bypassed", "offline"] },
+    nextCursor: { type: ["string", "null"] },
     truncated: { type: "boolean" },
   },
-  required: ["items", "notice", "truncated"],
+  required: ["items", "notice", "cacheStatus", "nextCursor", "truncated"],
 } as const;
 
 export const WALLET_SETUP_OUTPUT_SCHEMA = {
@@ -211,8 +213,18 @@ export const PREVIEW_OUTPUT_SCHEMA = {
     verificationStatus: {},
     accessUrl: {},
     offlineCache: { type: "string" },
+    cacheStatus: { type: "string", enum: ["live", "bypassed", "offline"] },
   },
-  required: ["id", "title", "description", "price", "type", "verificationStatus", "accessUrl"],
+  required: [
+    "id",
+    "title",
+    "description",
+    "price",
+    "type",
+    "verificationStatus",
+    "accessUrl",
+    "cacheStatus",
+  ],
 } as const;
 
 const DRY_RUN_SCHEMA = {
@@ -248,22 +260,26 @@ export const SETTLEMENT_SCHEMA = {
   type: "object",
   properties: {
     polled: { type: "boolean" },
+    waitPolicy: { type: "string", enum: ["return-after-submit", "wait-for-final-result"] },
     txHash: { type: ["string", "null"] },
     status: { type: ["string", "null"] },
     settled: { type: "boolean" },
     success: { type: "boolean" },
     timedOut: { type: "boolean" },
+    cancelled: { type: "boolean" },
     attempts: { type: "integer" },
     skipped: { type: "boolean" },
     message: { type: "string" },
   },
   required: [
     "polled",
+    "waitPolicy",
     "txHash",
     "status",
     "settled",
     "success",
     "timedOut",
+    "cancelled",
     "attempts",
     "skipped",
     "message",
@@ -629,16 +645,42 @@ export const TX_STATUS_OUTPUT_SCHEMA = {
   oneOf: [TX_FOUND_SCHEMA, TEXT_RESULT_SCHEMA],
 } as const;
 
+/**
+ * How to learn the outcome of a transaction that was submitted but not
+ * confirmed (#1060): call `tool` with `arguments`; safe to repeat.
+ */
+const TX_STATUS_LOOKUP_SCHEMA = {
+  type: "object",
+  properties: {
+    tool: { type: "string", const: "mindvault_tx_status" },
+    arguments: {
+      type: "object",
+      properties: { txHash: { type: "string" } },
+      required: ["txHash"],
+    },
+    retryable: { type: "boolean" },
+  },
+  required: ["tool", "arguments", "retryable"],
+} as const;
+
 const ONCHAIN_MUTATION_SUCCESS = {
   type: "object",
   properties: {
-    status: { type: "string" },
+    status: {
+      type: "string",
+      description:
+        '"success" once confirmed; "submitted" when the transaction was accepted but its outcome could not be read (poll timeout or RPC outage) — check it with statusLookup instead of resubmitting.',
+    },
     resourceId: { type: "string" },
     txHash: { type: ["string", "null"] },
     metadata: { type: "string" },
     price: { type: "string" },
     newCreator: { type: "string" },
     listed: { type: "boolean" },
+    confirmed: { type: "boolean" },
+    reason: { type: "string", enum: ["confirmation_timeout", "rpc_unavailable"] },
+    statusLookup: TX_STATUS_LOOKUP_SCHEMA,
+    message: { type: "string" },
   },
   required: ["status", "resourceId", "txHash"],
 } as const;
@@ -701,6 +743,7 @@ export const PUBLISH_BATCH_OUTPUT_SCHEMA = {
     onchainStatus: { type: "string" },
     txHash: { type: ["string", "null"] },
     items: { type: "array", items: BATCH_PUBLISH_ITEM_SCHEMA },
+    statusLookup: TX_STATUS_LOOKUP_SCHEMA,
   },
   required: ["requested", "verified", "rejected", "errored", "onchainStatus", "txHash", "items"],
 } as const;
@@ -784,4 +827,40 @@ export const RESOURCE_SUBSCRIPTION_OUTPUT_SCHEMA = {
     message: { type: "string" },
   },
   required: ["resourceId"],
+} as const;
+
+/** Output schema for credentials-free profile export/import. */
+export const PROFILE_EXPORT_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    schema: { type: "string", const: "mindvault.profile-export" },
+    version: { type: "integer", const: 1 },
+    activeProfile: { type: "string" },
+    profiles: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          network: { type: "string", enum: ["testnet", "mainnet"] },
+          preferences: {
+            type: "object",
+            propertyNames: {
+              pattern: "^(?!.*(secret|private|seed|credential|apikey|token|password)).*$",
+            },
+            additionalProperties: { type: ["string", "number", "boolean", "null"] },
+          },
+        },
+        required: ["name", "preferences"],
+      },
+    },
+  },
+  required: ["schema", "version", "activeProfile", "profiles"],
+} as const;
+
+export const PROFILE_IMPORT_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: { imported: { type: "array", items: { type: "string" } } },
+  required: ["imported"],
 } as const;

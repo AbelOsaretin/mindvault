@@ -33,7 +33,11 @@ import { REGISTRY_LIST_MAX_LIMIT } from "./registryPagination.js";
 import { RECEIPT_EXPORT_MAX_LIMIT } from "./receipts.js";
 import { DEBUG_BUNDLE_MAX_AUDIT_LINES } from "./debugBundleSchema.js";
 import { TOOL_DEFINITIONS } from "./tools.js";
-import { MAX_SETTLEMENT_TIMEOUT_MS, MIN_SETTLEMENT_INTERVAL_MS } from "./settlement.js";
+import {
+  MAX_SETTLEMENT_TIMEOUT_MS,
+  MIN_SETTLEMENT_INTERVAL_MS,
+  TRANSACTION_WAIT_POLICIES,
+} from "./settlement.js";
 
 // ── Spec model ────────────────────────────────────────────────────────────────
 
@@ -206,6 +210,8 @@ const CATALOG_FILTER_ARGS: ToolArgumentSpec = {
   offset: { kind: "integer", min: 0 },
   tags: { kind: "string", maxLength: 256 },
   listed: { kind: "flag" },
+  cursor: { kind: "string", maxLength: 4096 },
+  bypassCache: { kind: "flag" },
 };
 
 // ── Per-tool specs ────────────────────────────────────────────────────────────
@@ -257,9 +263,13 @@ export const TOOL_ARGUMENT_SPECS: Record<string, ToolArgumentSpec> = {
     network: { kind: "enum", values: ["testnet", "mainnet"], required: true },
   },
   mindvault_list_profiles: {},
+  mindvault_export_profiles: {},
+  mindvault_import_profiles: {
+    data: { kind: "string", required: true, maxLength: 1_048_576 },
+  },
   mindvault_browse: { ...CATALOG_FILTER_ARGS },
   mindvault_search: { ...CATALOG_FILTER_ARGS },
-  mindvault_preview: { resourceId: RESOURCE_ID },
+  mindvault_preview: { resourceId: RESOURCE_ID, bypassCache: { kind: "flag" } },
   mindvault_register: {
     name: { kind: "string", required: true, maxLength: 128 },
     email: {
@@ -299,6 +309,7 @@ export const TOOL_ARGUMENT_SPECS: Record<string, ToolArgumentSpec> = {
     confirmMainnet: CONFIRM_MAINNET,
     confirmPaid: CONFIRM_PAID,
     wait: { kind: "flag" },
+    waitPolicy: { kind: "enum", values: TRANSACTION_WAIT_POLICIES },
     timeoutMs: {
       kind: "integer",
       min: 0,
@@ -368,6 +379,10 @@ export const TOOL_ARGUMENT_SPECS: Record<string, ToolArgumentSpec> = {
     confirmMainnet: CONFIRM_MAINNET,
   },
   mindvault_backup_state: { passphrase: PASSPHRASE, confirm: { kind: "flag" } },
+  mindvault_compare_state_backup: {
+    blob: { kind: "string", required: true, maxLength: 1_048_576 },
+    passphrase: PASSPHRASE,
+  },
   mindvault_resource_provenance: { resourceId: RESOURCE_ID },
   mindvault_resource_change_log: { resourceId: RESOURCE_ID },
   mindvault_restore_state: {

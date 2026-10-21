@@ -15,6 +15,7 @@
  */
 
 import { catalogFilterInputProperties } from "./catalogFilters.js";
+import { withToolErrorVariant } from "./outputValidation.js";
 import {
   AGENT_STATUS_OUTPUT_SCHEMA,
   ATTESTATION_VERIFICATION_OUTPUT_SCHEMA,
@@ -35,6 +36,8 @@ import {
   PUBLISH_BATCH_OUTPUT_SCHEMA,
   PUBLISH_STATUS_OUTPUT_SCHEMA,
   PUBLISH_TEMPLATE_OUTPUT_SCHEMA,
+  PROFILE_EXPORT_OUTPUT_SCHEMA,
+  PROFILE_IMPORT_OUTPUT_SCHEMA,
   PURCHASE_HISTORY_OUTPUT_SCHEMA,
   BUY_OUTPUT_SCHEMA,
   RECOVER_CACHE_OUTPUT_SCHEMA,
@@ -107,7 +110,7 @@ export interface ToolDefinition {
   annotations: ToolAnnotations;
 }
 
-export const TOOL_DEFINITIONS: ToolDefinition[] = [
+const DEFINED_TOOLS: ToolDefinition[] = [
   {
     name: "mindvault_setup_wallet",
     description:
@@ -219,6 +222,36 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: "mindvault_export_profiles",
+    description:
+      "Export versioned, non-secret profile setup metadata for a team. The payload contains profile names, network preferences, and safe user preferences only; wallet secret keys, private keys, seed phrases, and publisher API keys are never included.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+    outputSchema: PROFILE_EXPORT_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+    annotations: {
+      title: "Export Profile Setup",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  {
+    name: "mindvault_import_profiles",
+    description:
+      "Import a versioned, non-secret profile setup payload. It merges profile names and preferences without overwriting wallet credentials or publisher API keys.",
+    inputSchema: {
+      type: "object",
+      properties: { data: { type: "string", description: "JSON profile-export payload." } },
+      required: ["data"],
+    },
+    outputSchema: PROFILE_IMPORT_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+    annotations: {
+      title: "Import Profile Setup",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  {
     name: "mindvault_switch_network_profile",
     description:
       "Switch the active wallet profile and Stellar network together, then re-run install verification for the selected network.",
@@ -261,7 +294,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "mindvault_search",
     description:
-      "Search the MindVault catalog by keyword and optional filters for price, resource type, verification status, owner, sort, pagination, tags, and listed state. Uses server-side filtering where supported and returns compact resource summaries.",
+      "Search the MindVault catalog by keyword and optional filters for price, resource type, verification status, owner, sort, pagination, tags, and listed state. Uses server-side filtering where supported and returns compact resource summaries. Use nextCursor for pagination; cursors are bound to the active profile and exact filter set. Set bypassCache=true for a fresh per-call read.",
     inputSchema: {
       type: "object",
       properties: { ...catalogFilterInputProperties },
@@ -395,7 +428,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "mindvault_buy",
     description:
-      "Pay USDC via x402 and access a resource. Payments above MINDVAULT_MAX_AUTO_PAY_USDC (10 USDC by default) require maxAutoPayUsdc set to at least the resource price. On mainnet, pass confirmMainnet: true (or set MINDVAULT_ALLOW_MAINNET=1). Pass dryRun: true to validate the resource and show intended payment flow without submitting payment. Pass wait: true to poll the payment transaction until it settles on-chain before returning.",
+      'Pay USDC via x402 and access a resource. Payments above MINDVAULT_MAX_AUTO_PAY_USDC (10 USDC by default) require maxAutoPayUsdc set to at least the resource price. On mainnet, pass confirmMainnet: true (or set MINDVAULT_ALLOW_MAINNET=1). Pass dryRun: true to validate the resource and show intended payment flow without submitting payment. Pass waitPolicy: "wait-for-final-result" (or wait: true) to poll the payment transaction until it settles on-chain before returning; the default "return-after-submit" returns immediately with the tx hash and current status.',
     inputSchema: {
       type: "object",
       properties: {
@@ -425,7 +458,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         wait: {
           type: "boolean",
           description:
-            "Optional flag. When true, wait and poll the payment transaction on Soroban until it settles (SUCCESS or FAILED) or the timeout elapses, returning a settlement confirmation block. Off by default, in which case the buy returns as soon as the payment response arrives.",
+            'Optional flag. When true, wait and poll the payment transaction on Soroban until it settles (SUCCESS or FAILED) or the timeout elapses, returning a settlement confirmation block. Off by default, in which case the buy returns as soon as the payment response arrives. Legacy shorthand for waitPolicy: "wait-for-final-result".',
+        },
+        waitPolicy: {
+          type: "string",
+          enum: ["return-after-submit", "wait-for-final-result"],
+          description:
+            'How long to wait for the payment transaction before returning. "return-after-submit" (default) returns as soon as the payment is submitted, reporting the tx hash and any status already known; "wait-for-final-result" polls until the transaction reaches a terminal status or timeoutMs elapses. Takes precedence over wait when both are set.',
+          examples: ["return-after-submit", "wait-for-final-result"],
         },
         timeoutMs: {
           type: "integer",
@@ -603,6 +643,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           description:
             "The resource ID to register on-chain (from mindvault_publish output). Must be verified and not already registered. Example: 'cm7x8y9z'",
           examples: ["cm7x8y9z", "res-001", "ckx9j2h3f"],
+        },
+        bypassCache: {
+          type: "boolean",
+          description:
+            "Fetch fresh metadata for this call and report cacheStatus=bypassed without changing shared cache policy.",
         },
         confirmMainnet: {
           type: "boolean",
@@ -938,6 +983,31 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
     annotations: {
       title: "Back Up State",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  {
+    name: "mindvault_compare_state_backup",
+    description:
+      "Compare local state with an encrypted backup without restoring it. Verifies backup integrity and reports only version, digest equality, and structural paths; wallet secrets and API keys are never returned.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        blob: {
+          type: "string",
+          description: "Encrypted backup blob from mindvault_backup_state (v1:… format).",
+        },
+        passphrase: {
+          type: "string",
+          description: "Passphrase used when the backup was created (min 8 characters).",
+        },
+      },
+      required: ["blob", "passphrase"],
+    },
+    annotations: {
+      title: "Compare State Backup",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -1716,3 +1786,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
 ];
+
+/**
+ * Every tool, as advertised. A structured tool's `outputSchema` covers both
+ * of its results: the success payload, or the troubleshooting hint a failed
+ * call carries (#1062). Clients validate `structuredContent` on errors too, so
+ * a schema that described only success turned every mapped failure into a
+ * client-side validation exception.
+ */
+export const TOOL_DEFINITIONS: ToolDefinition[] = DEFINED_TOOLS.map((tool) =>
+  tool.outputSchema ? { ...tool, outputSchema: withToolErrorVariant(tool.outputSchema) } : tool,
+);
