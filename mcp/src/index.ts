@@ -249,7 +249,9 @@ import {
   getPreviewSnapshot,
   recordCatalogSnapshot,
   recordPreviewSnapshot,
+  type CatalogCacheContext,
 } from "./catalogCache.js";
+import { createCatalogCursor, resolveCatalogCursor } from "./catalogCursor.js";
 import { publishBatch, type BatchPublishItem } from "./tools/publish.js";
 import { buyLease, leaseStatus } from "./tools/leases.js";
 
@@ -270,6 +272,19 @@ const SPONSORED_ACCOUNT_URL = initialConfig.sponsoredAccountUrl;
 let HORIZON_URL = initialConfig.horizonUrl;
 let SOROBAN_RPC_URL = initialConfig.sorobanRpcUrl;
 const PLATFORM_WALLET_ADDRESS = initialConfig.platformWalletAddress;
+
+function catalogCacheContext(): CatalogCacheContext {
+  return {
+    profile: activeProfileName,
+    network: STELLAR_NETWORK,
+    contractId: REGISTRY_CONTRACT_ID,
+    apiOrigin: new URL(BASE_URL).origin,
+  };
+}
+
+function catalogCacheKey(url: string): string {
+  return url;
+}
 
 function applyNetworkConfig(network: "testnet" | "mainnet"): void {
   process.env.STELLAR_NETWORK = network;
@@ -664,7 +679,7 @@ export async function prewarmCatalogCache(): Promise<string> {
   try {
     await browseOutcome({});
     const elapsedMs = Date.now() - startedAt;
-    const snapshot = getCatalogSnapshot();
+    const snapshot = getCatalogSnapshot(Date.now(), "catalog", catalogCacheContext());
     const count = snapshot && Array.isArray(snapshot.resources) ? snapshot.resources.length : 0;
     return `Catalog pre-warmed: ${count} resource(s) cached in ${elapsedMs}ms.`;
   } catch (err) {
@@ -1133,7 +1148,12 @@ function catalogItemStructured(r: any): {
   };
 }
 
-function catalogOutcome(items: any[], body: string, notice: string | null): ToolOutcome {
+function catalogOutcome(
+  items: any[],
+  body: string,
+  notice: string | null,
+  options: { cacheStatus?: "live" | "bypassed" | "offline"; nextCursor?: string | null } = {},
+): ToolOutcome {
   const full = notice ? `${body}\n\n${notice}` : body;
   const text = truncateResponse(full);
   return {
@@ -1141,6 +1161,8 @@ function catalogOutcome(items: any[], body: string, notice: string | null): Tool
     structured: {
       items: items.map(catalogItemStructured),
       notice,
+      cacheStatus: options.cacheStatus ?? (notice ? "offline" : "live"),
+      nextCursor: options.nextCursor ?? null,
       truncated: text !== full,
     },
   };
@@ -1867,10 +1889,14 @@ function catalogFallbackFor(err: unknown): CatalogFallbackReason | null {
 }
 
 /** Resolve a failed catalog read to a snapshot, or rethrow when it must surface. */
-function catalogSnapshotFor(err: unknown): { resources: unknown[]; notice: string } | null {
+function catalogSnapshotFor(
+  err: unknown,
+  key = "catalog",
+  context = catalogCacheContext(),
+): { resources: unknown[]; notice: string } | null {
   const reason = catalogFallbackFor(err);
   if (!reason) return null;
-  const snapshot = getCatalogSnapshot();
+  const snapshot = getCatalogSnapshot(Date.now(), key, context);
   if (!snapshot) return null;
   return {
     resources: snapshot.resources,
@@ -1879,10 +1905,19 @@ function catalogSnapshotFor(err: unknown): { resources: unknown[]; notice: strin
 }
 
 async function browseOutcome(filters: CatalogFilters = {}): Promise<ToolOutcome> {
-  const qs = buildCatalogQueryString(filters);
+  const context = catalogCacheContext();
+  const cursorResult = filters.cursor
+    ? resolveCatalogCursor(filters.cursor, filters, context)
+    : { ok: true as const, offset: filters.offset };
+  if (!cursorResult.ok) return catalogOutcome([], cursorResult.error, null);
+  const requestFilters =
+    cursorResult.offset === undefined ? filters : { ...filters, offset: cursorResult.offset };
+  const qs = buildCatalogQueryString(requestFilters);
   const url = qs ? `${BASE_URL}/resources?${qs}` : `${BASE_URL}/resources`;
   let raw: any[] = [];
   let notice: string | null = null;
+  let nextOffset: number | null = null;
+  let fromCache = false;
   try {
     const res = await jsonFetch(url);
     if (!res.ok) {
@@ -1896,13 +1931,29 @@ async function browseOutcome(filters: CatalogFilters = {}): Promise<ToolOutcome>
       );
     }
     raw = Array.isArray(res.data) ? res.data : [];
-    recordCatalogSnapshot(raw);
+    recordCatalogSnapshot(raw, catalogCacheKey(url), context);
     notice = cacheStalenessNotice(res.headers);
+    const header = res.headers["x-next-offset"];
+    nextOffset = header === undefined ? null : Number(header);
   } catch (err) {
-    const fallback = catalogSnapshotFor(err);
+    const fallback = filters.bypassCache
+      ? null
+      : (() => {
+          const reason = catalogFallbackFor(err);
+          const snapshot = reason
+            ? getCatalogSnapshot(Date.now(), catalogCacheKey(url), context)
+            : null;
+          return snapshot && reason
+            ? {
+                resources: snapshot.resources,
+                notice: catalogCacheLabel(snapshot.savedAtMs, Date.now(), reason),
+              }
+            : null;
+        })();
     if (!fallback) throw err;
     raw = Array.isArray(fallback.resources) ? (fallback.resources as any[]) : [];
     notice = fallback.notice;
+    fromCache = true;
   }
   const items: any[] = applyCatalogSort(applyClientCatalogFilters(raw, filters), filters.sort);
   const body =
@@ -1918,7 +1969,14 @@ async function browseOutcome(filters: CatalogFilters = {}): Promise<ToolOutcome>
         ? `No resources match ${describeCatalogFilters(filters)}.`
         : "No resources listed yet."
       : items.map(formatResource).join("\n\n");
-  return catalogOutcome(items, body, notice);
+  const nextCursor =
+    nextOffset !== null && Number.isInteger(nextOffset)
+      ? createCatalogCursor(nextOffset, filters, context)
+      : null;
+  return catalogOutcome(items, body, notice, {
+    cacheStatus: fromCache ? "offline" : filters.bypassCache ? "bypassed" : "live",
+    nextCursor,
+  });
 }
 
 export async function browse(filters: CatalogFilters = {}): Promise<string> {
@@ -1940,7 +1998,8 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
     filters.limit !== undefined ||
     filters.offset !== undefined ||
     (filters.tags && filters.tags.length > 0) ||
-    filters.listed !== undefined,
+    filters.listed !== undefined ||
+    filters.cursor,
   );
   if (!hasCriteria) {
     return catalogOutcome([], "Provide a search query or at least one catalog filter.", null);
@@ -1950,8 +2009,19 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
   const url = qs ? `${BASE_URL}/resources?${qs}` : `${BASE_URL}/resources`;
   let raw: any[] = [];
   let notice: string | null = null;
+  let nextOffset: number | null = null;
+  let fromCache = false;
+  const context = catalogCacheContext();
+  const cursorResult = filters.cursor
+    ? resolveCatalogCursor(filters.cursor, filters, context)
+    : { ok: true as const, offset: filters.offset };
+  if (!cursorResult.ok) return catalogOutcome([], cursorResult.error, null);
+  const requestFilters =
+    cursorResult.offset === undefined ? filters : { ...filters, offset: cursorResult.offset };
+  const requestQs = buildCatalogQueryString(requestFilters);
+  const requestUrl = requestQs ? `${BASE_URL}/resources?${requestQs}` : `${BASE_URL}/resources`;
   try {
-    const res = await jsonFetch(url);
+    const res = await jsonFetch(requestUrl);
     if (!res.ok) {
       throw mcpError(
         mapHttpError({
@@ -1963,13 +2033,18 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
       );
     }
     raw = Array.isArray(res.data) ? res.data : [];
-    recordCatalogSnapshot(raw);
+    recordCatalogSnapshot(raw, catalogCacheKey(requestUrl), context);
     notice = cacheStalenessNotice(res.headers);
+    const header = res.headers["x-next-offset"];
+    nextOffset = header === undefined ? null : Number(header);
   } catch (err) {
-    const fallback = catalogSnapshotFor(err);
+    const fallback = filters.bypassCache
+      ? null
+      : catalogSnapshotFor(err, catalogCacheKey(requestUrl), context);
     if (!fallback) throw err;
     raw = Array.isArray(fallback.resources) ? (fallback.resources as any[]) : [];
     notice = fallback.notice;
+    fromCache = true;
   }
 
   // Client-side keyword / tags / listed / skipped for unit-test compatibility
@@ -1977,9 +2052,21 @@ async function searchOutcome(filtersOrQuery: string | CatalogFilters): Promise<T
   const items = applyCatalogSort(applyClientCatalogFilters(raw, filters), filters.sort);
 
   if (items.length === 0) {
-    return catalogOutcome([], `No resources match ${describeCatalogFilters(filters)}.`, notice);
+    return catalogOutcome([], `No resources match ${describeCatalogFilters(filters)}.`, notice, {
+      cacheStatus: fromCache ? "offline" : filters.bypassCache ? "bypassed" : "live",
+      nextCursor:
+        nextOffset !== null && Number.isInteger(nextOffset)
+          ? createCatalogCursor(nextOffset, filters, context)
+          : null,
+    });
   }
-  return catalogOutcome(items, items.map(formatResource).join("\n\n"), notice);
+  return catalogOutcome(items, items.map(formatResource).join("\n\n"), notice, {
+    cacheStatus: fromCache ? "offline" : filters.bypassCache ? "bypassed" : "live",
+    nextCursor:
+      nextOffset !== null && Number.isInteger(nextOffset)
+        ? createCatalogCursor(nextOffset, filters, context)
+        : null,
+  });
 }
 
 export async function search(filtersOrQuery: string | CatalogFilters): Promise<string> {
@@ -1992,7 +2079,10 @@ export async function search(filtersOrQuery: string | CatalogFilters): Promise<s
  * reachable-but-error response is surfaced verbatim — the cache only covers the
  * unreachable case.
  */
-async function previewData(resourceId: string): Promise<{ r: any; label: string | null }> {
+async function previewData(
+  resourceId: string,
+  bypassCache = false,
+): Promise<{ r: any; label: string | null; cacheStatus: "live" | "bypassed" | "offline" }> {
   try {
     const res = await jsonFetch(`${BASE_URL}/resources/${resourceId}/meta`);
     if (!res.ok)
@@ -2002,20 +2092,24 @@ async function previewData(resourceId: string): Promise<{ r: any; label: string 
         status: res.status,
         data: res.data,
       });
-    recordPreviewSnapshot(resourceId, res.data);
-    return { r: res.data, label: null };
+    recordPreviewSnapshot(resourceId, res.data, catalogCacheContext());
+    return { r: res.data, label: null, cacheStatus: bypassCache ? "bypassed" : "live" };
   } catch (err) {
     // Same rule as browse/search: a snapshot answers for a catalog that could
     // not answer, never for a 404 on an id the agent got wrong (#837).
-    const reason = catalogFallbackFor(err);
-    const snap = reason ? getPreviewSnapshot(resourceId) : null;
+    const reason = bypassCache ? null : catalogFallbackFor(err);
+    const snap = reason ? getPreviewSnapshot(resourceId, Date.now(), catalogCacheContext()) : null;
     if (!snap || !reason) throw err;
-    return { r: snap.meta as any, label: catalogCacheLabel(snap.savedAtMs, Date.now(), reason) };
+    return {
+      r: snap.meta as any,
+      label: catalogCacheLabel(snap.savedAtMs, Date.now(), reason),
+      cacheStatus: "offline",
+    };
   }
 }
 
-export async function preview(resourceId: string): Promise<string> {
-  const { r, label } = await previewData(resourceId);
+export async function preview(resourceId: string, bypassCache = false): Promise<string> {
+  const { r, label, cacheStatus } = await previewData(resourceId, bypassCache);
   // Publisher-supplied title/description are unbounded at the source, so cap
   // them before serializing rather than truncating the JSON afterwards (#582).
   const out: Record<string, unknown> = applyPreviewLimits({
@@ -2026,6 +2120,7 @@ export async function preview(resourceId: string): Promise<string> {
     type: r.resourceType,
     verificationStatus: r.verificationStatus,
     accessUrl: r.accessUrl,
+    cacheStatus,
   });
   if (label) out.offlineCache = label;
   return serializePreview(out);
@@ -4035,7 +4130,7 @@ async function dispatchToolOutcome(
         return parsed.ok ? searchOutcome(parsed.filters) : parsed.error;
       }
       case "mindvault_preview":
-        return preview(requiredString(args, "resourceId"));
+        return preview(requiredString(args, "resourceId"), flag(args, "bypassCache"));
       case "mindvault_register":
         return register(
           requiredString(args, "name"),
