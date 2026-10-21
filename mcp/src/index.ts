@@ -193,6 +193,7 @@ import {
   type TimeoutService,
 } from "./httpTimeout.js";
 import { resolveToolTimeouts, timeoutForTool } from "./toolTimeoutOverrides.js";
+import { describeProxyConfig, resolveProxyConfig, withProxy } from "./proxy.js";
 import {
   describeRetryPolicy,
   formatRetryLog,
@@ -325,9 +326,10 @@ export function _setMockMode(on: boolean): void {
   if (on) process.env.MINDVAULT_MOCK = "1";
   else delete process.env.MINDVAULT_MOCK;
 }
+const PROXY_CONFIG = resolveProxyConfig(process.env);
 const httpFetch: typeof fetch = MOCK
   ? createMockFetch(() => currentWallet()?.publicKey)
-  : (input, init) => fetch(input as RequestInfo | URL, init);
+  : withProxy((input, init) => fetch(input as RequestInfo | URL, init), PROXY_CONFIG);
 
 const TIMEOUTS = resolveTimeouts(process.env);
 const TOOL_TIMEOUTS = resolveToolTimeouts(process.env).overrides;
@@ -3856,6 +3858,7 @@ export function networkProfile(): string {
     usdcContractId,
     timeouts: describeTimeouts(TIMEOUTS),
     retries: describeRetryPolicy(RETRY_POLICY),
+    proxy: describeProxyConfig(PROXY_CONFIG),
     warnings,
   };
 
